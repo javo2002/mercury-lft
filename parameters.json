@@ -1,0 +1,265 @@
+{
+    "sma": {
+        "AAPL": {
+            "n1": 80,
+            "n2": 180,
+            "atr_multiplier": 6.0
+        },
+        "AMD": {
+            "n1": 20,
+            "n2": 220,
+            "atr_multiplier": 2.0
+        },
+        "AMZN": {
+            "n1": 30,
+            "n2": 240,
+            "atr_multiplier": 10.0
+        },
+        "B": {
+            "n1": 30,
+            "n2": 240,
+            "atr_multiplier": 2.0
+        },
+        "BAC": {
+            "n1": 20,
+            "n2": 180,
+            "atr_multiplier": 2.0
+        },
+        "CMCSA": {
+            "n1": 80,
+            "n2": 120,
+            "atr_multiplier": 8.0
+        },
+        "CMG": {
+            "n1": 50,
+            "n2": 200,
+            "atr_multiplier": 2.0
+        },
+        "CSX": {
+            "n1": 60,
+            "n2": 240,
+            "atr_multiplier": 2.0
+        },
+        "EEM": {
+            "n1": 50,
+            "n2": 160,
+            "atr_multiplier": 2.0
+        },
+        "EWZ": {
+            "n1": 20,
+            "n2": 200,
+            "atr_multiplier": 2.0
+        },
+        "FXI": {
+            "n1": 30,
+            "n2": 100,
+            "atr_multiplier": 8.0
+        },
+        "GDX": {
+            "n1": 60,
+            "n2": 140,
+            "atr_multiplier": 2.0
+        },
+        "GOOGL": {
+            "n1": 40,
+            "n2": 240,
+            "atr_multiplier": 2.0
+        },
+        "HYG": {
+            "n1": 60,
+            "n2": 100,
+            "atr_multiplier": 2.0
+        },
+        "INTC": {
+            "n1": 60,
+            "n2": 240,
+            "atr_multiplier": 10.0
+        },
+        "KWEB": {
+            "n1": 40,
+            "n2": 220,
+            "atr_multiplier": 2.0
+        },
+        "LQD": {
+            "n1": 30,
+            "n2": 160,
+            "atr_multiplier": 2.0
+        },
+        "NVDA": {
+            "n1": 50,
+            "n2": 180,
+            "atr_multiplier": 2.0
+        },
+        "PFE": {
+            "n1": 70,
+            "n2": 220,
+            "atr_multiplier": 6.0
+        },
+        "SPY": {
+            "n1": 20,
+            "n2": 200,
+            "atr_multiplier": 2.0
+        },
+        "T": {
+            "n1": 70,
+            "n2": 220,
+            "atr_multiplier": 2.0
+        },
+        "TLT": {
+            "n1": 20,
+            "n2": 100,
+            "atr_multiplier": 4.0
+        },
+        "XLF": {
+            "n1": 20,
+            "n2": 100,
+            "atr_multiplier": 4.0
+        }
+    },
+    "rsi": {
+        "AAPL": {
+            "rsi_period": 15,
+            "oversold_threshold": 25,
+            "overbought_threshold": 85,
+            "atr_multiplier": 2.0
+        },
+        "AMD": {
+            "rsi_period": 20,
+            "oversold_threshold": 30,
+            "overbought_threshold": 85,
+            "atr_multiplier": 1.0
+        },
+        "AMZN": {
+            "rsi_period": 20,
+            "oversold_threshold": 35,
+            "overbought_threshold": 80,
+            "atr_multiplier": 3.0
+        },
+        "B": {
+            "rsi_period": 20,
+            "oversold_threshold": 15,
+            "overbought_threshold": 75,
+            "atr_multiplier": 1.0
+        },
+        "BAC": {
+            "rsi_period": 30,
+            "oversold_threshold": 15,
+            "overbought_threshold": 70,
+            "atr_multiplier": 2.0
+        },
+        "CMCSA": {
+            "rsi_period": 25,
+            "oversold_threshold": 30,
+            "overbought_threshold": 75,
+            "atr_multiplier": 1.0
+        },
+        "CMG": {
+            "rsi_period": 25,
+            "oversold_threshold": 25,
+            "overbought_threshold": 85,
+            "atr_multiplier": 2.0
+        },
+        "CSX": {
+            "rsi_period": 10,
+            "oversold_threshold": 35,
+            "overbought_threshold": 85,
+            "atr_multiplier": 2.0
+        },
+        "EEM": {
+            "rsi_period": 20,
+            "oversold_threshold": 15,
+            "overbought_threshold": 80,
+            "atr_multiplier": 1.0
+        },
+        "EWZ": {
+            "rsi_period": 25,
+            "oversold_threshold": 35,
+            "overbought_threshold": 65,
+            "atr_multiplier": 4.0
+        },
+        "FXI": {
+            "rsi_period": 15,
+            "oversold_threshold": 15,
+            "overbought_threshold": 85,
+            "atr_multiplier": 2.0
+        },
+        "GDX": {
+            "rsi_period": 20,
+            "oversold_threshold": 30,
+            "overbought_threshold": 65,
+            "atr_multiplier": 4.0
+        },
+        "GOOGL": {
+            "rsi_period": 25,
+            "oversold_threshold": 30,
+            "overbought_threshold": 85,
+            "atr_multiplier": 2.0
+        },
+        "HYG": {
+            "rsi_period": 15,
+            "oversold_threshold": 20,
+            "overbought_threshold": 80,
+            "atr_multiplier": 2.0
+        },
+        "INTC": {
+            "rsi_period": 25,
+            "oversold_threshold": 35,
+            "overbought_threshold": 65,
+            "atr_multiplier": 3.0
+        },
+        "KWEB": {
+            "rsi_period": 30,
+            "oversold_threshold": 35,
+            "overbought_threshold": 70,
+            "atr_multiplier": 1.0
+        },
+        "LQD": {
+            "rsi_period": 30,
+            "oversold_threshold": 25,
+            "overbought_threshold": 80,
+            "atr_multiplier": 1.0
+        },
+        "NVDA": {
+            "rsi_period": 10,
+            "oversold_threshold": 15,
+            "overbought_threshold": 85,
+            "atr_multiplier": 1.0
+        },
+        "PFE": {
+            "rsi_period": 25,
+            "oversold_threshold": 25,
+            "overbought_threshold": 70,
+            "atr_multiplier": 1.0
+        },
+        "PLTR": {
+            "rsi_period": 30,
+            "oversold_threshold": 15,
+            "overbought_threshold": 70,
+            "atr_multiplier": 1.0
+        },
+        "SPY": {
+            "rsi_period": 30,
+            "oversold_threshold": 15,
+            "overbought_threshold": 80,
+            "atr_multiplier": 1.0
+        },
+        "T": {
+            "rsi_period": 20,
+            "oversold_threshold": 30,
+            "overbought_threshold": 80,
+            "atr_multiplier": 2.0
+        },
+        "TLT": {
+            "rsi_period": 30,
+            "oversold_threshold": 15,
+            "overbought_threshold": 75,
+            "atr_multiplier": 5.0
+        },
+        "XLF": {
+            "rsi_period": 10,
+            "oversold_threshold": 35,
+            "overbought_threshold": 85,
+            "atr_multiplier": 2.0
+        }
+    }
+}
