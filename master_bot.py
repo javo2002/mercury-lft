@@ -1,174 +1,170 @@
 import os
-import sys
-import json
-import time
-import csv
-from datetime import datetime, timedelta
-import pandas as pd
-import talib
 from dotenv import load_dotenv
-from alpaca.trading.client import TradingClient
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
-from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
+import alpaca_trade_api as tradeapi
+from datetime import datetime, timedelta
+import sqlite3
+import pandas as pd
+from risk_manager import get_market_condition, is_correlation_safe
+import yfinance as yf
 
-# --- Import all strategy and utility modules ---
-from live_bot_sma import get_sma_signal
-from live_bot_rsi import get_rsi_signal
-from live_bot_volatility import get_volatility_signal
-from risk_manager import is_safe_to_trade
-
-# --- Configuration ---
+# --- CONFIGURATION ---
 load_dotenv()
-API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
-PARAMS_FILE = 'parameters.json'
-TRADE_LOG_FILE = 'trade_log.csv'
-POSITION_SIZE = 0.2
-TREND_SCREENER_FILE = 'trend_screener_results.txt'
-REVERSION_SCREENER_FILE = 'reversion_screener_results.txt'
-VOLATILITY_SCREENER_FILE = 'volatility_screener_results.txt'
+API_KEY = os.getenv('API_KEY'); API_SECRET = os.getenv('API_SECRET')
+BASE_URL = 'https://paper-api.alpaca.markets'; DATABASE_FILE = 'trading_data.db'
+ATR_PERIOD = 14; ATR_MULTIPLIER = 2.5
+MAX_OPEN_POSITIONS = 7; MAX_SECTOR_CONCENTRATION = 0.4 
+VIX_EXIT_THRESHOLD = 40.0; MAX_HOLDING_DAYS = 15
+PYRAMID_PROFIT_TARGET = 1.05 # Add to position if it's up 5% from entry
 
-# --- Utility Functions ---
-def load_json_file(file_path):
-    if not os.path.exists(file_path): return {}
-    with open(file_path, 'r') as f: return json.load(f)
+# --- HELPER FUNCTIONS ---
+sector_cache = {}
 
-def get_tickers_from_file(file_path):
+def get_alpaca_api():
     try:
-        with open(file_path, 'r') as f: return {line.strip() for line in f if line.strip()}
-    except FileNotFoundError: return set()
+        api = tradeapi.REST(API_KEY, API_SECRET, base_url=BASE_URL, api_version='v2')
+        api.get_account()
+        return api
+    except Exception: return None
 
-def execute_trade(trading_client, ticker, strategy_name, signal, close_price, atr_value, atr_multiplier):
-    """Handles the logic for submitting buy or sell orders."""
-    print(f"--- Executing trade for {ticker} with signal: {signal} ---")
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def get_atr(ticker, period):
     try:
-        trading_client.close_position(ticker)
-        print(f"Closed any existing position for {ticker} to ensure fresh entry.")
-        time.sleep(1)
-    except Exception:
-        pass # No position to close
-
-    equity = float(trading_client.get_account().equity)
-    qty = int((equity * POSITION_SIZE) / close_price)
+        data = yf.download(ticker, period=f"{period*2}d", progress=False)
+        if data.empty: return None
+        high_low = data['High'] - data['Low']
+        high_close = abs(data['High'] - data['Close'].shift())
+        low_close = abs(data['Low'] - data['Close'].shift())
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = ranges.max(axis=1)
+        return true_range.rolling(window=period).mean().iloc[-1]
+    except Exception: return None
     
-    if qty <= 0:
-        print(f"Calculated quantity is zero. Skipping trade.")
-        return
-
-    side = OrderSide.BUY if signal == 'BUY' else OrderSide.SELL
-    stop_price = close_price - (atr_value * atr_multiplier) if side == OrderSide.BUY else close_price + (atr_value * atr_multiplier)
-
-    order_data = MarketOrderRequest(symbol=ticker, qty=qty, side=side, time_in_force=TimeInForce.DAY, stop_loss={'stop_price': stop_price})
-    trading_client.submit_order(order_data=order_data)
-    print(f"Submitted {side.value} order for {qty} shares of {ticker}.")
-
-# --- Portfolio Management Function ---
-def manage_open_positions(trading_client, data_client, params_db):
-    print("\n--- Managing Open Positions ---")
+def get_sector(ticker):
+    if ticker in sector_cache: return sector_cache[ticker]
     try:
-        positions = trading_client.get_all_positions()
-        if not positions:
-            print("No open positions to manage.")
-            return
+        info = yf.Ticker(ticker).info
+        sector = info.get('sector', 'Unknown')
+        sector_cache[ticker] = sector
+        return sector
+    except Exception: return "Unknown"
 
-        print(f"Found {len(positions)} open positions to check.")
-        position_symbols = [p.symbol for p in positions]
-        
-        request_params = StockBarsRequest(symbol_or_symbols=position_symbols, timeframe=TimeFrame.Day, start=datetime.now() - timedelta(days=300))
-        barset_df = data_client.get_stock_bars(request_params).df
+def log_trade_to_db(ticker, asset_class, action, qty, price, reason, stop_price=None):
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    conn = get_db_connection()
+    conn.execute(
+        'INSERT INTO trades (timestamp, ticker, asset_class, action, quantity, price, reason, trade_type, stop_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (timestamp, ticker, asset_class, action.upper(), qty, price, reason, 'AUTOMATED', stop_price)
+    )
+    conn.commit()
+    conn.close()
 
-        for p in positions:
-            print(f"Checking exit conditions for {p.symbol}...")
-            if p.symbol not in barset_df.index:
-                print(f"  - Could not get data for {p.symbol}, skipping.")
-                continue
-            
-            ticker_data = barset_df.loc[p.symbol]
-            
-            # Check SMA Exit (Bearish Crossover)
-            sma_params = params_db.get('sma', {}).get(p.symbol)
-            if sma_params:
-                sma_signal, _, _ = get_sma_signal(ticker_data, sma_params)
-                if sma_signal == 'SELL':
-                    print(f"  - SMA SELL signal detected for {p.symbol}. Closing position.")
-                    trading_client.close_position(p.symbol)
-                    continue
-
-            # Check RSI Exit (Crosses below 50)
-            rsi_params = params_db.get('rsi', {}).get(p.symbol)
-            if rsi_params:
-                rsi = talib.RSI(ticker_data['close'], timeperiod=rsi_params['rsi_period'])
-                if not rsi.empty and rsi.iloc[-1] < 50:
-                     print(f"  - RSI SELL signal detected (RSI < 50) for {p.symbol}. Closing position.")
-                     trading_client.close_position(p.symbol)
-                     continue
-            
-            print(f"  - No exit signal for {p.symbol}. Holding.")
-    except Exception as e:
-        print(f"Error managing open positions: {e}")
-
-# --- Main Bot Logic ---
+# --- TRADING LOGIC ---
 def run_master_bot():
-    print("--- Starting Master Bot Execution ---")
+    print(f"\n--- [ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ] ---")
+    print("--- Running Master Bot (Tier 1 Complete) ---")
     
-    trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-    data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
-    
-    if not is_safe_to_trade(data_client):
-        print("\nRisk Manager: Halting new trades.")
-        return
+    api = get_alpaca_api()
+    if not api: return
 
-    params_db = load_json_file(PARAMS_FILE)
+    # --- 0. PRE-MARKET & PORTFOLIO CHECKS ---
+    try:
+        vix_data = yf.download('^VIX', period="5d", progress=False)
+        if vix_data['Close'].iloc[-1] > VIX_EXIT_THRESHOLD:
+            print("VIX SPIKE! Liquidating all positions."); api.close_all_positions(cancel_orders=True); return
+    except Exception: pass
 
-    # 1. Manage existing positions BEFORE looking for new ones
-    manage_open_positions(trading_client, data_client, params_db)
-    
-    # 2. Look for new entry signals
-    print("\n--- Searching for New Entry Signals ---")
-    trend_tickers = get_tickers_from_file(TREND_SCREENER_FILE)
-    reversion_tickers = get_tickers_from_file(REVERSION_SCREENER_FILE)
-    volatility_tickers = get_tickers_from_file(VOLATILITY_SCREENER_FILE)
+    positions = api.list_positions()
+    conn = get_db_connection()
+    today = datetime.now().strftime('%Y-%m-%d')
+    signals = conn.execute("SELECT * FROM signals WHERE date = ?", (today,)).fetchall()
+    signal_map = {s['ticker']: s['live_signal'] for s in signals}
 
-    all_unique_tickers = sorted(list(trend_tickers.union(reversion_tickers).union(volatility_tickers)))
-    print(f"Found {len(all_unique_tickers)} unique tickers to analyze for new trades.")
+    # --- 1. POSITION MANAGEMENT (STOPS, TIME EXITS, & PYRAMIDING) ---
+    for p in positions:
+        print(f"Managing position in {p.symbol} ({p.side})...")
+        is_long = p.side == 'long'
+        asset_class = 'crypto' if '/' in p.symbol else 'stock'
+        db_ticker = p.symbol.replace('/', '-') if asset_class == 'crypto' else p.symbol
+        last_trade_action = 'BUY' if is_long else 'SELL'
+        last_trade = conn.execute(f"SELECT * FROM trades WHERE ticker = ? AND action = '{last_trade_action}' ORDER BY timestamp DESC LIMIT 1", (db_ticker,)).fetchone()
+        
+        if not last_trade: continue
 
-    if not all_unique_tickers:
-        print("No tickers to analyze for new signals.")
-        return
+        entry_time = datetime.strptime(last_trade['timestamp'], '%Y-%m-%d %H:%M:%S')
+        if (datetime.now() - entry_time).days > MAX_HOLDING_DAYS:
+            print(f"  -> TIME STOP for {p.symbol}. Closing position."); api.close_position(p.symbol); continue
 
-    request_params = StockBarsRequest(symbol_or_symbols=all_unique_tickers, timeframe=TimeFrame.Day, start=datetime.now() - timedelta(days=730))
-    barset_df = data_client.get_stock_bars(request_params).df
-    
-    strategies = {
-        'SMA': {'tickers': trend_tickers, 'signal_func': get_sma_signal},
-        'RSI': {'tickers': reversion_tickers, 'signal_func': get_rsi_signal},
-        'Volatility': {'tickers': volatility_tickers, 'signal_func': get_volatility_signal}
-    }
+        current_price = float(p.current_price); stop_price = float(last_trade['stop_price']) if last_trade['stop_price'] else 0
+        if stop_price > 0 and ((is_long and current_price < stop_price) or (not is_long and current_price > stop_price)):
+            print(f"  -> TRAILING STOP for {p.symbol}. Closing position."); api.close_position(p.symbol); continue
 
-    for strat_key, config in strategies.items():
-        print(f"\n--- Analyzing {len(config['tickers'])} {strat_key} candidates for entry ---")
-        for ticker in sorted(list(config['tickers'])):
-            if ticker not in barset_df.index: continue
+        current_signal = signal_map.get(db_ticker)
+        entry_price = float(last_trade['price'])
+        if is_long and current_signal and 'BUY' in current_signal and current_price > (entry_price * PYRAMID_PROFIT_TARGET):
+            print(f"  -> PYRAMID SIGNAL for winning trade {p.symbol}. Adding to position.")
+            try:
+                qty_to_add = (1000 / current_price) / 2
+                api.submit_order(symbol=p.symbol, qty=qty_to_add, side='buy', type='limit', time_in_force='day', limit_price=round(current_price * 1.001, 2))
+                log_trade_to_db(db_ticker, asset_class, 'buy', qty_to_add, current_price, f"Pyramid on {current_signal}", stop_price)
+            except Exception as e:
+                print(f"    -> ERROR adding to position: {e}")
+                
+    # --- 2. NEW TRADE ENTRY LOGIC ---
+    market_condition = get_market_condition()
+    if market_condition == 'NEUTRAL':
+        print("Market is NEUTRAL. No new signal-based trades."); conn.close(); return
+
+    positions = api.list_positions()
+    if len(positions) >= MAX_OPEN_POSITIONS:
+        print(f"Portfolio at max capacity ({len(positions)}/{MAX_OPEN_POSITIONS})."); conn.close(); return
+        
+    open_positions_tickers = [p.symbol.replace('/','-') for p in positions]
+    for signal in signals:
+        ticker, asset_class = signal['ticker'], signal['asset_class']
+        api_symbol = ticker.replace('-', '/') if asset_class == 'crypto' else ticker
+        
+        trade_side = None
+        if market_condition == 'BULLISH' and 'BUY' in signal['live_signal']: trade_side = 'buy'
+        elif market_condition == 'BEARISH' and 'SELL' in signal['live_signal']: trade_side = 'sell'
+
+        if trade_side and ticker not in open_positions_tickers:
+            print(f"Found new {trade_side.upper()} signal for {ticker}.")
+
+            if not is_correlation_safe(ticker, open_positions_tickers):
+                print(f"  -> SKIPPING {ticker} due to high correlation with portfolio.")
+                continue
+
+            try:
+                atr = get_atr(ticker, ATR_PERIOD)
+                if not atr: continue
+                
+                if trade_side == 'buy':
+                    quote = api.get_latest_quote(api_symbol)
+                    limit_price = quote.ask_price * 1.001
+                    initial_stop = limit_price - (atr * ATR_MULTIPLIER)
+                else: # sell
+                    quote = api.get_latest_quote(api_symbol)
+                    limit_price = quote.bid_price * 0.999
+                    initial_stop = limit_price + (atr * ATR_MULTIPLIER)
+
+                qty = 1000 / limit_price
+                api.submit_order(symbol=api_symbol, qty=qty, side=trade_side, type='limit', time_in_force='day', limit_price=round(limit_price, 2))
+                log_trade_to_db(ticker, asset_class, trade_side, qty, limit_price, f"Signal: {signal['live_signal']}", initial_stop)
+                open_positions_tickers.append(ticker) # Add to list for subsequent correlation checks
+            except Exception as e:
+                print(f"  -> ERROR submitting order for {api_symbol}: {e}")
             
-            ticker_data = barset_df.loc[ticker]
-            params = params_db.get(strat_key.lower(), {}).get(ticker, {})
-            atr_multiplier = params.get('atr_multiplier', 2.0)
-            
-            signal, close_price, atr_value = config['signal_func'](ticker_data, params)
-            
-            if signal:
-                execute_trade(trading_client, ticker, strat_key, signal, close_price, atr_value, atr_multiplier)
-            else:
-                print(f"No new {strat_key} signal for {ticker}.")
+            if len(open_positions_tickers) >= MAX_OPEN_POSITIONS:
+                print("Portfolio has now reached max capacity. Halting new entries for this run.")
+                break
 
-    print("\n--- Master Bot Execution Complete ---")
+    conn.close()
+    print("\n--- Master Bot Tier 1 Run Complete ---")
 
-if __name__ == "__main__":
-    if not API_KEY or not API_SECRET:
-        print("Error: API Keys not set. Did you create a .env file?")
-        sys.exit(1)
+if __name__ == '__main__':
     run_master_bot()
 

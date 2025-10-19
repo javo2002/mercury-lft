@@ -1,146 +1,280 @@
 import os
-import json
+import time
 import logging
-from flask import Flask, jsonify, request, send_from_directory
-from flask_cors import CORS
+from flask import Flask, jsonify, render_template, request, send_file
+from flask_sock import Sock
 from dotenv import load_dotenv
-import google.generativeai as genai
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import MarketOrderRequest
-from alpaca.trading.enums import OrderSide, TimeInForce
-from risk_manager import is_safe_to_trade
-from alpaca.data.historical import StockHistoricalDataClient
+import alpaca_trade_api as tradeapi
+import sqlite3
+import pandas as pd
+import yfinance as yf
+from risk_manager import get_market_condition
+import ai_services
+import performance_calculator
+import json
+from io import StringIO
+from datetime import datetime
 
-# --- Load all environment variables from .env file ---
+# --- CONFIGURATION & LOGGING ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 load_dotenv()
-API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+API_KEY = os.getenv('API_KEY'); API_SECRET = os.getenv('API_SECRET')
+BASE_URL = 'https://paper-api.alpaca.markets'; DATABASE_FILE = 'trading_data.db'
+app = Flask(__name__, template_folder='.'); sock = Sock(app)
 
-# --- Initialize Flask App and configure logging ---
-app = Flask(__name__)
-CORS(app)
-logging.basicConfig(level=logging.INFO)
-
-# --- Initialize Gemini AI Model ---
-try:
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY not found in .env file.")
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-pro-latest')
-except Exception as e:
-    app.logger.error(f"!!! CRITICAL ERROR: Could not configure Gemini AI. Check your GEMINI_API_KEY. Details: {e}", exc_info=True)
-    model = None
-
-# --- API Endpoint for Live Portfolio Data ---
-@app.route('/portfolio-data')
-def get_portfolio_data():
+# --- HELPER FUNCTIONS ---
+def get_db_connection():
+    conn = sqlite3.connect(DATABASE_FILE, check_same_thread=False); conn.row_factory = sqlite3.Row
+    return conn
+def get_alpaca_api():
     try:
-        if not API_KEY or not API_SECRET: raise ValueError("Alpaca API keys are not set.")
-        trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-        data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
-        
-        account = trading_client.get_account()
-        positions = trading_client.get_all_positions()
-        market_safe = is_safe_to_trade(data_client)
-        
-        positions_data = [{
-            "symbol": p.symbol, "qty": float(p.qty), "avg_entry_price": float(p.avg_entry_price),
-            "current_price": float(p.current_price), "unrealized_pl": float(p.unrealized_pl),
-        } for p in positions]
+        api = tradeapi.REST(API_KEY, API_SECRET, base_url=BASE_URL, api_version='v2'); api.get_account()
+        return api
+    except Exception as e:
+        logging.error(f"Failed to connect to Alpaca API: {e}")
+        return None
 
-        data = {
-            "equity": float(account.equity),
-            "pnl_today": float(account.equity) - float(account.last_equity),
-            "market_is_safe": market_safe,
-            "positions": positions_data
-        }
+# --- API ENDPOINTS ---
+@app.route('/')
+def index(sock=None): return render_template('signal_visualizer.html')
+
+@app.route('/api/trade_history')
+def get_trade_history(sock=None):
+    logging.info("API call: /api/trade_history")
+    try:
+        conn = get_db_connection()
+        trades = conn.execute("SELECT * FROM trades ORDER BY timestamp DESC").fetchall()
+        conn.close()
+        logging.info(f"Successfully fetched {len(trades)} trade history records.")
+        return jsonify([dict(row) for row in trades])
+    except Exception as e:
+        logging.error(f"Error in /api/trade_history: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/performance_stats')
+def get_performance_stats(sock=None):
+    logging.info("API call: /api/performance_stats")
+    try:
+        conn = get_db_connection()
+        trades_df = pd.read_sql_query("SELECT * FROM trades", conn)
+        conn.close()
+        stats = performance_calculator.calculate_performance_metrics(trades_df)
+        logging.info("Successfully calculated performance stats.")
+        return jsonify(stats)
+    except Exception as e:
+        logging.error(f"Error in /api/performance_stats: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chart_data/<ticker>')
+def get_chart_data(ticker, sock=None):
+    logging.info(f"API call: /api/chart_data/{ticker}")
+    try:
+        data = yf.download(ticker, period="2y", progress=False)
+        if data.empty: return jsonify({'error': 'No historical data found'}), 404
+        conn = get_db_connection()
+        trades = conn.execute("SELECT timestamp, action, price FROM trades WHERE ticker = ?", (ticker,)).fetchall()
+        conn.close()
+        trade_markers = [{'time': pd.to_datetime(t['timestamp']).strftime('%Y-%m-%d'), 'position': 'aboveBar' if t['action']=='SELL' else 'belowBar', 'color': '#fb7185' if t['action']=='SELL' else '#34d399', 'shape': 'arrowDown' if t['action']=='SELL' else 'arrowUp', 'text': f"{t['action']} @ {t['price']:.2f}"} for t in trades]
+        data.reset_index(inplace=True)
+        chart_data = data.rename(columns={"Date": "time", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume":"volume"})
+        logging.info(f"Successfully fetched chart data for {ticker}.")
+        return jsonify({'candlestick_data': chart_data.to_dict(orient='records'),'trade_markers': trade_markers,'volume_data': chart_data[['time', 'volume']].to_dict(orient='records')})
+    except Exception as e:
+        logging.error(f"Error in /api/chart_data/{ticker}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/equity_curve')
+def get_equity_curve(sock=None):
+    logging.info("API call: /api/equity_curve")
+    try:
+        api = get_alpaca_api()
+        history = api.get_portfolio_history(period='3M', timeframe='1D')
+        df = pd.DataFrame({'time': [datetime.fromtimestamp(t).strftime('%Y-%m-%d') for t in history.timestamp], 'value': history.equity})
+        logging.info("Successfully fetched equity curve data.")
+        return jsonify(df.to_dict(orient='records'))
+    except Exception as e:
+        logging.error(f"Error in /api/equity_curve: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export/<data_type>')
+def export_data(data_type, sock=None):
+    logging.info(f"API call: /api/export/{data_type}")
+    try:
+        conn = get_db_connection()
+        if data_type == 'trades':
+            df = pd.read_sql_query("SELECT * FROM trades", conn)
+            filename = "trade_history.csv"
+        else:
+            return "Invalid data type", 400
+        conn.close()
+        csv_buffer = StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+        return send_file(csv_buffer, as_attachment=True, download_name=filename, mimetype='text/csv')
+    except Exception as e:
+        logging.error(f"Error in /api/export/{data_type}: {e}")
+        return "Error generating file.", 500
+
+@app.route('/api/daily_trade_plan')
+def get_daily_trade_plan(sock=None):
+    logging.info("API call: /api/daily_trade_plan")
+    try:
+        market_condition = get_market_condition()
+        today = datetime.now().strftime('%Y-%m-%d')
+        conn = get_db_connection()
+        signals = conn.execute("SELECT ticker, live_signal FROM signals WHERE date = ? AND live_signal != 'NONE'", (today,)).fetchall()
+        conn.close()
+        economic_events = ai_services.get_economic_events()
+        plan = ai_services.generate_daily_trade_plan(market_condition, [dict(s) for s in signals], economic_events)
+        logging.info("Successfully generated daily trade plan.")
+        return jsonify({'plan': plan})
+    except Exception as e:
+        logging.error(f"Error in /api/daily_trade_plan: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/deep_analysis/<ticker>')
+def get_deep_analysis_route(ticker, sock=None):
+    logging.info(f"API call: /api/deep_analysis/{ticker}")
+    try:
+        analysis = ai_services.get_deep_analysis(ticker)
+        return jsonify({'analysis': analysis})
+    except Exception as e:
+        logging.error(f"Error in /api/deep_analysis/{ticker}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/correlation_matrix')
+def get_correlation_matrix(sock=None):
+    logging.info("API call: /api/correlation_matrix")
+    try:
+        api = get_alpaca_api()
+        positions = api.list_positions()
+        tickers = [p.symbol.replace('/', '-') for p in positions]
+        if len(tickers) < 2:
+            return jsonify({'error': 'Need at least 2 positions to calculate correlation.'})
+        data = yf.download(tickers, period="3mo", progress=False)['Adj Close']
+        returns = data.pct_change().dropna()
+        corr_matrix = returns.corr()
+        interpretation = ai_services.interpret_correlation_matrix(corr_matrix)
+        matrix_html = corr_matrix.style.background_gradient(cmap='coolwarm').set_properties(**{'font-size': '10pt'}).to_html()
+        return jsonify({'matrix_html': matrix_html, 'interpretation': interpretation})
+    except Exception as e:
+        logging.error(f"Error in /api/correlation_matrix: {e}")
+        return jsonify({'error': str(e)}), 500
+        
+@app.route('/api/ask_gemini', methods=['POST'])
+def ask_gemini(sock=None):
+    user_message = request.json.get('message')
+    logging.info(f"API call: /api/ask_gemini with message: {user_message}")
+    if not user_message: return jsonify({'error': 'No message provided'}), 400
+    try:
+        conn = get_db_connection()
+        trades_history = conn.execute("SELECT * FROM trades ORDER BY timestamp DESC").fetchall()
+        conn.close()
+        history_str = "\n".join([f"{row['timestamp']},{row['ticker']},{row['action']},{row['quantity']},{row['price']},{row['trade_type']}" for row in trades_history]) or "No trades yet."
+        prompt = f"""You are a trading analyst. Answer the user's question based on the provided trade history.\n\n**Trade History (timestamp,ticker,action,qty,price,type):**\n{history_str}\n\n**Question:** "{user_message}" """
+        model = ai_services.genai.GenerativeModel('gemini-pro-latest')
+        response = model.generate_content(prompt)
+        return jsonify({'reply': response.text})
+    except Exception as e:
+        logging.error(f"Error in /api/ask_gemini: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/dashboard_data')
+def get_dashboard_data(sock=None):
+    logging.info("API call: /api/dashboard_data")
+    try:
+        today = datetime.now().strftime('%Y-%m-%d')
+        conn = get_db_connection()
+        signals_raw = conn.execute("SELECT * FROM signals WHERE date = ?", (today,)).fetchall()
+        sentiment_raw = conn.execute("SELECT * FROM sentiment WHERE date = ?", (today,)).fetchall()
+        conn.close()
+        signals = [dict(row) for row in signals_raw]
+        sentiment = {row['ticker']: dict(row) for row in sentiment_raw}
+        watchlist = []
+        for signal in signals:
+            ticker = signal['ticker']
+            ticker_sentiment = sentiment.get(ticker, {})
+            watchlist.append({ 'ticker': ticker, 'last_close': signal.get('last_close'), 'live_signal': signal.get('live_signal'), 'sentiment_label': ticker_sentiment.get('sentiment_label'), })
+        return jsonify(watchlist)
+    except Exception as e:
+        logging.error(f"Error in /api/dashboard_data: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/analyze_behavior')
+def analyze_behavior(sock=None):
+    logging.info("API call: /api/analyze_behavior")
+    try:
+        conn = get_db_connection()
+        manual_trades = conn.execute("SELECT * FROM trades WHERE trade_type = 'MANUAL' ORDER BY timestamp ASC").fetchall()
+        conn.close()
+        if not manual_trades:
+            return jsonify({'analysis': "No manual trades found to analyze."})
+        history_str = "\n".join([f"{row['timestamp']},{row['ticker']},{row['action']},{row['quantity']},{row['price']}" for row in manual_trades])
+        prompt = f"""
+        You are a trading psychologist AI. Analyze the user's manual trades for biases like the Disposition Effect, Revenge Trading, or FOMO.
+        **Manual Trades:**\n{history_str}\n
+        Provide a concise, bulleted list of constructive observations.
+        """
+        model = ai_services.genai.GenerativeModel('gemini-pro-latest')
+        response = model.generate_content(prompt)
+        return jsonify({'analysis': response.text})
+    except Exception as e:
+        logging.error(f"Error in /api/analyze_behavior: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/portfolio_status')
+def get_portfolio_status(sock=None):
+    logging.info("API call: /api/portfolio_status")
+    try:
+        api = get_alpaca_api()
+        if not api: raise Exception("Failed to connect to Alpaca API")
+        account = api.get_account()
+        positions = api.list_positions()
+        data = {'portfolio_value': float(account.portfolio_value), 'cash': float(account.cash), 'positions': [{'symbol': p.symbol, 'qty': float(p.qty), 'market_value': float(p.market_value), 'unrealized_pl': float(p.unrealized_pl), 'avg_entry_price': float(p.avg_entry_price), 'current_price': float(p.current_price)} for p in positions]}
         return jsonify(data)
     except Exception as e:
-        app.logger.error("!!! PORTFOLIO API ERROR !!!", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"Error in /api/portfolio_status: {e}")
+        return jsonify({'error': str(e)}), 500
 
-# --- API Endpoint to Securely Execute Trades ---
-@app.route('/execute-trade', methods=['POST'])
-def execute_trade_endpoint():
+# --- WEBSOCKETS ---
+@sock.route('/ws_prices')
+def price_stream(ws):
+    logging.info("Price streaming client connected.")
     try:
-        if not API_KEY or not API_SECRET: raise ValueError("Alpaca API keys are not set.")
-        trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-        
-        data = request.json
-        symbol = data.get('symbol')
-        qty = data.get('qty')
-        side = data.get('side')
-
-        if not symbol or not qty or not side:
-            return jsonify({"status": "error", "message": "Missing symbol, qty, or side"}), 400
-
-        order_data = MarketOrderRequest(
-            symbol=symbol,
-            qty=qty,
-            side=OrderSide.BUY if side.upper() == 'BUY' else OrderSide.SELL,
-            time_in_force=TimeInForce.DAY
-        )
-        trading_client.submit_order(order_data=order_data)
-        
-        return jsonify({"status": "success", "message": f"Successfully placed {side} order for {qty} shares of {symbol}."})
+        stream = tradeapi.Stream(API_KEY, API_SECRET)
+        async def on_trade(t):
+            try: ws.send(json.dumps({'symbol': t.symbol, 'price': t.price}))
+            except Exception: pass
+        api = get_alpaca_api()
+        symbols = [p.symbol for p in api.list_positions()]
+        if symbols:
+            logging.info(f"Subscribing to live trades for: {', '.join(symbols)}")
+            stream.subscribe_trades(on_trade, *symbols)
+            stream.run()
     except Exception as e:
-        app.logger.error("!!! TRADE EXECUTION ERROR !!!", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        logging.error(f"Price streaming error: {e}")
+    finally:
+        logging.info("Price streaming client disconnected.")
 
-# --- API Endpoint for AI Chatbot ---
-@app.route('/ask-ai', methods=['POST'])
-def ask_ai():
-    if model is None:
-        return jsonify({"answer": "AI model not configured. Please check the server logs for errors."}), 500
+@sock.route('/ws_logs')
+def log_stream(ws):
+    logging.info("Log streaming client connected.")
+    log_file = 'nohup.out'
     try:
-        user_question = request.json['question']
-        
-        with open('signal_report.json', 'r') as f:
-            technical_data = json.load(f)
-        try:
-            with open('sentiment_report.json', 'r') as f:
-                sentiment_data = json.load(f)
-        except FileNotFoundError:
-            sentiment_data = {}
-
-        trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-        positions = trading_client.get_all_positions()
-        positions_data = [{"symbol": p.symbol, "qty": p.qty, "avg_entry_price": p.avg_entry_price} for p in positions]
-
-        prompt = f"""
-        You are "Mercury AI," an expert trading assistant. Your task is to synthesize technical, sentiment, and live portfolio data to answer a user's question.
-
-        **CRITICAL INSTRUCTIONS:**
-        1.  Start with a disclaimer that you cannot give financial advice.
-        2.  For any ticker mentioned, you MUST cross-reference its technical signal with its sentiment data and check if the user already holds a position.
-        3.  Your analysis MUST reflect ALL available data sources.
-        4.  You MUST use the following Markdown template for each highlighted stock:
-            ### [Ticker Symbol] (Based on [Strategy Name])
-            **Analysis:** [Combine the technical signal and news sentiment. Example: "The stock shows a 'Bullish Crossover', supported by positive news sentiment (+0.8) related to 'new product launch' keywords."]
-            **Bot Action:** [Explain what the automated morning bot will do. If the user already holds the stock, explain the BOT'S EXIT STRATEGY. For RSI, the exit is crossing 50. For SMA, it's a bearish crossover. If it's a new signal, explain the entry logic.]
-            **Suggested Quantity:** [Calculate quantity using: (100,000 * 0.05) / current_price. Round down. State the 5% risk allocation.]
-            **Manual Trade Context:** [Advise whether to let the bot manage the trade or if a manual action is being considered. Example: "Since you hold this position, the bot is already managing it. Its exit rule is X. A manual exit now would override the bot's strategy."]
-
-        Here is the TECHNICAL data: {json.dumps(technical_data, indent=2)}
-        Here is the SENTIMENT data: {json.dumps(sentiment_data, indent=2)}
-        Here are the user's CURRENTLY HELD POSITIONS: {json.dumps(positions_data, indent=2)}
-        User's question: "{user_question}"
-        """
-        response = model.generate_content(prompt)
-        return jsonify({"answer": response.text})
+        with open(log_file, 'r') as f:
+            f.seek(0, 2)
+            while True:
+                line = f.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                ws.send(line)
     except Exception as e:
-        app.logger.error("!!! CHATBOT ERROR !!!", exc_info=True)
-        return jsonify({"answer": "Sorry, an error occurred. Please check the server terminal for details."}), 500
+        logging.error(f"Log streaming error: {e}")
+    finally:
+        logging.info("Log streaming client disconnected.")
 
-# --- Routes to serve the main HTML and other static files ---
-@app.route('/')
-def index():
-    return send_from_directory('.', 'signal_visualizer.html')
-
-@app.route('/<path:path>')
-def serve_files(path):
-    return send_from_directory('.', path)
-
+# --- MAIN EXECUTION ---
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8080, debug=False)
+

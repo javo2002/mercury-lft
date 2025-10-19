@@ -1,2 +1,10 @@
 .venv/
 .env
+__pycache__/
+*.log
+data/
+.env
+*.save
+*_screener_results.txt
+sentiment_report.json
+signal_report.json

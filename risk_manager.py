@@ -1,50 +1,84 @@
-import os
-from datetime import datetime, timedelta
-import talib
-from dotenv import load_dotenv
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
+import yfinance as yf
+import pandas as pd
 
-# --- Load API keys from .env file ---
-load_dotenv()
-API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
+CORR_THRESHOLD = 0.7 # Don't add a new position if its avg correlation to the portfolio is > 70%
+CORR_PERIOD = "1y"
 
-def is_safe_to_trade(data_client: StockHistoricalDataClient):
+def get_market_condition(spy_period=200, vix_threshold=35.0):
     """
-    Checks if the overall market condition is safe for taking new long positions.
-    Returns True if safe, False otherwise.
+    Analyzes multiple factors to determine the overall market condition.
+    
+    Returns:
+        str: 'BULLISH', 'BEARISH', or 'NEUTRAL'
     """
-    print("\n--- Running Risk Manager ---")
+    print("--- Running Market Condition Analysis ---")
     try:
-        # Re-initialize the client if one isn't passed, ensuring keys are loaded
-        if not data_client:
-            if not API_KEY or not API_SECRET: raise ValueError("API keys not found for Risk Manager")
-            data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
+        # 1. SPY Trend Check
+        spy_hist = yf.Ticker("SPY").history(period=f"{spy_period + 50}d")
+        if spy_hist.empty:
+            print("Warning: Could not fetch SPY data. Defaulting to NEUTRAL.")
+            return 'NEUTRAL'
+            
+        spy_sma = spy_hist['Close'].rolling(window=spy_period).mean().iloc[-1]
+        spy_current_price = spy_hist['Close'].iloc[-1]
+        is_uptrend = spy_current_price > spy_sma
+        print(f"SPY Trend Check: Price=${spy_current_price:.2f}, SMA=${spy_sma:.2f} -> {'UPTREND' if is_uptrend else 'DOWNTREND'}")
 
-        spy_request = StockBarsRequest(
-            symbol_or_symbols=["SPY"],
-            timeframe=TimeFrame.Day,
-            start=datetime.now() - timedelta(days=300),
-            feed='iex'
-        )
-        spy_bars = data_client.get_stock_bars(spy_request).df
-        
-        if spy_bars.empty:
-            print("Risk Manager: Could not fetch SPY data. Defaulting to NOT SAFE.")
-            return False
-        
-        spy_close = spy_bars['close'].iloc[-1]
-        spy_sma_200 = talib.SMA(spy_bars['close'], timeperiod=200).iloc[-1]
-        
-        if spy_close > spy_sma_200:
-            print(f"Risk Manager: Market is SAFE (SPY Close ${spy_close:.2f} > 200-SMA ${spy_sma_200:.2f})")
-            return True
+        # 2. VIX Fear Check
+        vix_hist = yf.Ticker("^VIX").history(period="5d")
+        vix_current_level = vix_hist['Close'].iloc[-1]
+        is_high_fear = vix_current_level > vix_threshold
+        print(f"VIX Fear Check: Level={vix_current_level:.2f}, Threshold=<{vix_threshold} -> {'HIGH FEAR' if is_high_fear else 'NORMAL'}")
+
+        # 3. Yield Curve Check
+        ten_year = yf.Ticker("^TNX").history(period="5d")['Close'].iloc[-1]
+        three_month = yf.Ticker("^IRX").history(period="5d")['Close'].iloc[-1]
+        is_inverted = ten_year < three_month
+        print(f"Yield Curve Check: 10Y={ten_year:.2f}%, 3M={three_month:.2f}% -> {'INVERTED' if is_inverted else 'NORMAL'}")
+
+        if is_uptrend and not is_high_fear and not is_inverted:
+            print("Result: Market condition is BULLISH.")
+            return 'BULLISH'
+        elif not is_uptrend and not is_inverted:
+            print("Result: Market condition is BEARISH.")
+            return 'BEARISH'
         else:
-            print(f"Risk Manager: Market is NOT SAFE (SPY Close ${spy_close:.2f} <= 200-SMA ${spy_sma_200:.2f})")
-            return False
+            print("Result: Market condition is NEUTRAL/UNCERTAIN. No new trades advised.")
+            return 'NEUTRAL'
             
     except Exception as e:
-        print(f"Risk Manager Error: {e}. Defaulting to NOT SAFE.")
-        return False
+        print(f"Error during market condition analysis: {e}")
+        return 'NEUTRAL'
+
+def is_correlation_safe(new_ticker, open_positions_tickers):
+    """
+    Checks if a new ticker is highly correlated with existing positions.
+    """
+    if not open_positions_tickers:
+        return True
+
+    print(f"--- Running Correlation Check for {new_ticker} ---")
+    all_tickers = open_positions_tickers + [new_ticker]
+    try:
+        data = yf.download(all_tickers, period=CORR_PERIOD, progress=False)['Adj Close']
+        if data.empty or data.shape[1] != len(all_tickers):
+            print("  -> Warning: Could not get complete correlation data. Assuming safe.")
+            return True
+            
+        returns = data.pct_change().dropna()
+        corr_matrix = returns.corr()
+        avg_corr = corr_matrix[new_ticker][open_positions_tickers].mean()
+        
+        print(f"  -> Average correlation of {new_ticker} to portfolio: {avg_corr:.2f}")
+        
+        if avg_corr > CORR_THRESHOLD:
+            print(f"  -> Result: UNSAFE. Correlation ({avg_corr:.2f}) exceeds threshold ({CORR_THRESHOLD}).")
+            return False
+        else:
+            print(f"  -> Result: SAFE. Correlation is acceptable.")
+            return True
+
+    except Exception as e:
+        print(f"  -> Warning: Correlation check failed: {e}. Assuming safe.")
+        return True
+

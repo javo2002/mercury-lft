@@ -3,138 +3,169 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Project Mercury - Final Edition</title>
+    <title>Project Mercury - Command Center</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         :root {
-            --bg-glass: rgba(10, 10, 15, 0.6); 
-            --border-color: rgba(255, 255, 255, 0.1);
-            --text-primary: #f9fafb; --text-secondary: #a1a1aa;
-            --accent-primary: #aaa; --accent-green: #34d399; --accent-red: #fb7185;
+            --bg-glass: rgba(10, 10, 15, 0.6); --border-color: rgba(255, 255, 255, 0.1);
+            --text-primary: #f9fafb; --text-secondary: #a1a1aa; --accent-primary: #aaa;
+            --accent-green: #34d399; --accent-red: #fb7185;
         }
-        html { font-size: 14px; }
         body { 
             font-family: 'Inter', sans-serif; 
             background-image: url('https://images.unsplash.com/photo-1657978837950-03646a7c7b9e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2832');
             background-size: cover; background-position: center; background-attachment: fixed;
-            color: var(--text-primary); 
+            color: var(--text-primary);
         }
         .floating-panel {
-            background-color: var(--bg-glass);
-            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-color);
-            box-shadow: 0 16px 60px 0 rgba(0, 0, 0, 0.5);
+            background-color: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color); box-shadow: 0 16px 60px 0 rgba(0, 0, 0, 0.5);
         }
-        .widget-title { font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;}
-        .sidebar-link.active { color: var(--accent-primary); }
-        .tab-button.active { color: var(--accent-primary); border-color: var(--accent-primary); }
-        .ai-response h3 { font-size: 1.1rem; font-weight: 600; color: var(--accent-primary); margin-top: 1rem; margin-bottom: 0.5rem; }
-        .ai-response strong { color: var(--text-secondary); }
+        .widget-title { 
+            font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; 
+            border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; 
+            font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .sidebar-link.active { color: var(--accent-primary); background-color: rgba(255,255,255,0.05); }
+        .ai-chat-bubble { border: 1px solid var(--border-color); background: rgba(30, 41, 59, 0.6); }
+        @keyframes flash-green { 0% { background-color: transparent; } 50% { background-color: rgba(52, 211, 153, 0.3); } 100% { background-color: transparent; } }
+        @keyframes flash-red { 0% { background-color: transparent; } 50% { background-color: rgba(251, 113, 133, 0.3); } 100% { background-color: transparent; } }
+        .flash-green { animation: flash-green 0.7s ease-out; }
+        .flash-red { animation: flash-red 0.7s ease-out; }
+        #correlation-content table { width: 100%; border-collapse: collapse; }
+        #correlation-content th, #correlation-content td { padding: 8px; text-align: center; border: 1px solid var(--border-color); }
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
-
-    <div class="w-[85vw] h-[80vh] max-w-screen-xl flex items-center gap-6">
-        <nav class="floating-panel rounded-2xl flex-col items-center py-6 space-y-6 hidden sm:flex">
-            <div class="w-10 h-10 bg-[var(--accent-primary)] rounded-lg flex items-center justify-center font-bold text-black text-xl">M</div>
-            <a href="#" id="nav-dashboard" class="sidebar-link active p-3 rounded-lg" title="Dashboard"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg></a>
-            <a href="#" id="nav-positions" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Positions"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></a>
-            <a href="#" id="nav-watchlist" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Watchlists"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg></a>
+    <div class="w-[95vw] h-[90vh] max-w-screen-2xl flex items-center gap-6">
+        <nav class="floating-panel rounded-2xl flex-col items-center py-6 px-3 space-y-6 hidden sm:flex">
+             <div class="w-10 h-10 bg-[var(--accent-primary)] rounded-lg flex items-center justify-center font-bold text-black text-xl">M</div>
+            <a href="#" id="nav-dashboard" class="sidebar-link active p-3 rounded-lg" title="Dashboard (D)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg></a>
+            <a href="#" id="nav-positions" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Positions (P)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></a>
+            <a href="#" id="nav-history" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Trade History (H)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></a>
+            <a href="#" id="nav-analytics" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Analytics (A)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg></a>
+            <a href="#" id="nav-correlation" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Correlation Matrix (C)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></a>
+            <a href="#" id="nav-logs" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="System Logs (L)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></a>
         </nav>
         <main class="floating-panel rounded-2xl flex-1 h-full flex flex-col">
-            <div class="p-6 overflow-y-auto">
+            <div class="p-6 overflow-y-auto flex-1">
                 <div id="panel-dashboard" class="main-panel space-y-6">
-                    <header><h1 class="text-3xl font-bold text-white">Dashboard</h1></header>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div><h3 class="widget-title">Portfolio Summary</h3><div class="space-y-2"><div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Equity</span><span id="portfolio-equity" class="font-mono text-xl">Loading...</span></div><div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Today's PnL</span><span id="portfolio-pnl" class="font-mono text-xl">Loading...</span></div></div></div>
-                        <div><h3 class="widget-title">Market Status</h3><div id="market-status-indicator" class="flex flex-col items-center justify-center h-full"><span class="font-bold text-slate-400">LOADING...</span></div></div>
-                        <div>
-                            <h3 class="widget-title">Quick Trade</h3>
-                            <div class="flex space-x-2">
-                                <input type="text" id="trade-symbol" placeholder="Symbol" list="ticker-list" class="bg-slate-800/50 border border-[var(--border-color)] rounded-md w-1/3 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"><datalist id="ticker-list"></datalist>
-                                <input type="number" id="trade-qty" placeholder="Qty" class="bg-slate-800/50 border border-[var(--border-color)] rounded-md w-1/3 px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]">
-                                <button onclick="showConfirmModal('BUY')" class="bg-green-600/50 hover:bg-green-600/80 text-white font-bold py-1.5 px-4 rounded-md w-1/3">Buy</button>
-                                <button onclick="showConfirmModal('SELL')" class="bg-red-600/50 hover:bg-red-600/80 text-white font-bold py-1.5 px-4 rounded-md w-1/3">Sell</button>
-                            </div>
+                     <header><h1 class="text-3xl font-bold text-white">Dashboard</h1></header>
+                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-1 space-y-6">
+                            <div><h3 class="widget-title">Portfolio Summary</h3><div id="portfolio-summary" class="space-y-2 text-sm"></div></div>
+                            <div><h3 class="widget-title">Live Equity Curve</h3><div id="equity-curve-chart" class="w-full h-48"></div></div>
+                        </div>
+                        <div class="lg:col-span-2">
+                             <h3 class="widget-title">Signal Watchlist</h3>
+                             <div id="watchlist-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="h-96 flex flex-col"><h3 class="widget-title">Mercury AI</h3><div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-6 text-sm"><div><p class="inline-block bg-slate-700/80 rounded-lg px-4 py-3">Hello! How can I help you analyze your dashboard data today?</p></div></div><div class="mt-4 flex border-t border-[var(--border-color)] pt-4"><input id="chat-input" type="text" placeholder="Ask about the data..." onkeydown="if(event.key==='Enter') sendChatMessage()" class="flex-1 bg-slate-800/50 border border-[var(--border-color)] rounded-l-md px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)]"><button onclick="sendChatMessage()" class="bg-[var(--accent-primary)] text-white font-bold px-6 rounded-r-md">Send</button></div></div>
-                        <div class="h-96 flex flex-col"><h3 class="widget-title">News & Sentiment</h3><div id="news-feed" class="flex-1 overflow-y-auto pr-2 text-sm space-y-3"><p class="text-[var(--text-secondary)]">Loading news...</p></div></div>
-                    </div>
                 </div>
-                 <div id="panel-positions" class="main-panel space-y-6 hidden">
-                    <header><h1 class="text-3xl font-bold text-white">Open Positions</h1></header>
-                    <div class="overflow-y-auto"><table class="w-full text-left"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3 text-sm font-semibold text-[var(--text-secondary)]">Symbol</th><th class="p-3 text-sm font-semibold text-[var(--text-secondary)]">Qty</th><th class="p-3 text-sm font-semibold text-[var(--text-secondary)]">Avg Entry</th><th class="p-3 text-sm font-semibold text-[var(--text-secondary)]">Current Price</th><th class="p-3 text-sm font-semibold text-[var(--text-secondary)]">Unrealized P/L</th></tr></thead><tbody id="positions-table-body"></tbody></table></div>
-                </div>
-                <div id="panel-watchlist" class="main-panel space-y-6 hidden">
-                    <header><h1 class="text-3xl font-bold text-white">Signal Watchlists</h1></header>
-                    <div><div class="border-b border-[var(--border-color)]"><nav class="-mb-px flex space-x-8" aria-label="Tabs"><button id="tab-sma" class="tab-button active whitespace-nowrap py-3 px-1 border-b-2 font-semibold">Trend (SMA)</button><button id="tab-rsi" class="tab-button whitespace-nowrap py-3 px-1 border-b-2 border-transparent font-semibold text-slate-400 hover:text-white">Reversion (RSI)</button><button id="tab-volatility" class="tab-button whitespace-nowrap py-3 px-1 border-b-2 border-transparent font-semibold text-slate-400 hover:text-white">Volatility</button></nav></div><div class="pt-6"><div id="content-sma" class="tab-content"><div id="sma-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div></div><div id="content-rsi" class="tab-content hidden"><div id="rsi-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div></div><div id="content-volatility" class="tab-content hidden"><div id="volatility-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6"></div></div></div></div>
-                </div>
+                <div id="panel-positions" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">Open Positions</h1></header><div class="overflow-y-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3">Symbol</th><th>Qty</th><th>Avg Entry</th><th>Current Price</th><th>Unrealized P/L</th></tr></thead><tbody id="positions-table-body"></tbody></table></div></div>
+                <div id="panel-history" class="main-panel space-y-6 hidden"><header class="flex justify-between items-center"><h1 class="text-3xl font-bold text-white">Trade History</h1><button id="export-trades-btn" class="text-sm bg-slate-700/50 hover:bg-slate-700/80 px-3 py-1.5 rounded-md">Export CSV</button></header><div class="overflow-y-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3">Timestamp</th><th>Symbol</th><th>Action</th><th>Qty</th><th>Price</th><th>Type</th></tr></thead><tbody id="history-table-body"></tbody></table></div></div>
+                <div id="panel-analytics" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">Performance Analytics</h1></header><div id="analytics-content" class="text-sm">Loading...</div></div>
+                <div id="panel-correlation" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">Portfolio Correlation</h1></header><div id="correlation-content" class="text-sm">Loading...</div></div>
+                <div id="panel-logs" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">System Logs</h1></header><div id="logs-content" class="text-xs font-mono bg-slate-900/50 p-4 rounded-lg h-[60vh] overflow-y-scroll"></div></div>
             </div>
         </main>
+        <aside class="floating-panel rounded-2xl w-full max-w-md h-full flex-col hidden lg:flex">
+             <div class="p-4 border-b border-[var(--border-color)] flex justify-between items-center">
+                <h2 class="text-xl font-semibold text-white">Gemini AI Copilot</h2>
+                <button id="analyze-button" title="Analyze My Trading Behavior" class="text-slate-400 hover:text-white p-2 rounded-md hover:bg-slate-700/50"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></button>
+             </div>
+            <div id="chat-window" class="flex-1 p-4 space-y-4 overflow-y-auto"></div>
+            <div class="p-4 border-t border-[var(--border-color)]"><div class="flex space-x-2"><input type="text" id="chat-input" class="flex-1 bg-slate-800/50 border border-[var(--border-color)] rounded-lg px-4 py-2" placeholder="Ask, or type a ticker for a deep dive..."><button id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Send</button></div></div>
+        </aside>
     </div>
+    <div id="chart-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden"><div class="absolute inset-0 bg-black/50 backdrop-filter backdrop-blur-sm" onclick="closeModal()"></div><div class="relative w-full max-w-6xl floating-panel p-6 rounded-2xl"><button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl leading-none">&times;</button><h2 id="modal-title" class="widget-title text-xl font-bold text-white"></h2><div id="chart-container" class="mt-4 h-96"></div></div></div>
+<script>
+    let portfolioState = {}, equityChart = null, modalChart = null;
+    const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+    const getSignalColor = (sig) => sig?.includes('BUY') ? 'bg-green-600/80 text-white' : 'bg-slate-700/80 text-gray-300';
+    const getSentimentColor = (lbl) => (lbl === 'Positive' ? 'text-green-400' : lbl === 'Negative' ? 'text-red-400' : 'text-gray-400');
     
-    <div id="confirm-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
-        <div class="absolute inset-0 bg-black/50 backdrop-filter backdrop-blur-sm"></div>
-        <div class="relative floating-panel p-6 rounded-2xl w-full max-w-md">
-            <h3 id="confirm-title" class="text-lg font-bold text-white">Confirm Trade</h3>
-            <p id="confirm-text" class="mt-2 text-slate-300">Are you sure?</p>
-            <div class="mt-6 flex justify-end space-x-4">
-                <button onclick="closeConfirmModal()" class="px-4 py-2 rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
-                <button onclick="executeTrade()" id="confirm-button" class="px-4 py-2 rounded-md font-semibold text-white">Confirm</button>
-            </div>
-        </div>
-    </div>
+    async function fetchData(endpoint, options = {}) { const res = await fetch(endpoint, options); if (!res.ok) { const errorText = await res.text(); throw new Error(`API Error ${res.status}: ${errorText}`); } return res.json(); }
+    function addMessageToChat(msg, sender, isError = false) { const chatWindow = document.getElementById('chat-window'); if (!chatWindow) return; const wrapper = document.createElement('div'); wrapper.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`; const bubble = document.createElement('div'); bubble.className = `p-3 rounded-lg max-w-[80%] ${sender === 'user' ? 'bg-blue-600' : 'ai-chat-bubble'}`; if (isError) bubble.innerHTML = `<p class="text-red-400">${msg}</p>`; else if (sender === 'ai') bubble.innerHTML = marked.parse(msg); else bubble.textContent = msg; wrapper.appendChild(bubble); chatWindow.appendChild(wrapper); chatWindow.scrollTop = chatWindow.scrollHeight; }
 
-    <div id="modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
-        <div class="absolute inset-0 bg-black/50 backdrop-filter backdrop-blur-sm"></div>
-        <div class="relative w-full max-w-6xl floating-panel p-6">
-            <button onclick="closeModal()" class="absolute top-6 right-6 text-slate-400 hover:text-white text-3xl leading-none">&times;</button>
-            <h2 id="modal-title" class="widget-title text-2xl font-bold text-white"></h2>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6"><div id="modal-details" class="md-col-span-1 space-y-2 text-slate-400"></div><div class="md:col-span-2"><canvas id="modal-chart"></canvas></div></div>
-        </div>
-    </div>
+    function setupSidebar() { document.querySelectorAll('.sidebar-link').forEach(link=>{link.addEventListener('click', (e)=>{e.preventDefault();document.querySelectorAll('.sidebar-link').forEach(l=>l.classList.remove('active'));link.classList.add('active');const targetId=link.id.replace('nav-','panel-');document.querySelectorAll('.main-panel').forEach(p=>p.id===targetId?p.classList.remove('hidden'):p.classList.add('hidden'))})})}
+    
+    async function initializeDashboard() {
+        const [portfolio, dashboard, equity] = await Promise.all([
+            fetchData('/api/portfolio_status').catch(e => ({error: `Portfolio: ${e.message}`})),
+            fetchData('/api/dashboard_data').catch(e => ({error: `Watchlist: ${e.message}`})),
+            fetchData('/api/equity_curve').catch(e => ({error: `Equity Curve: ${e.message}`}))
+        ]);
+        updatePortfolioWidgets(portfolio);
+        renderWatchlist(dashboard);
+        renderEquityCurve(equity);
+    }
+    
+    function updatePortfolioWidgets(data) {
+        const summaryDiv = document.getElementById('portfolio-summary');
+        if (!summaryDiv) return;
+        if (data.error) { summaryDiv.innerHTML = `<p class="text-red-400 p-2">${data.error}</p>`; return; }
+        portfolioState.cash = data.cash; portfolioState.positions = {}; data.positions.forEach(p => { portfolioState.positions[p.symbol] = { qty: p.qty, avg_entry_price: p.avg_entry_price, current_price: p.current_price }; });
+        let totalPL = data.positions.reduce((acc, p) => acc + p.unrealized_pl, 0);
+        summaryDiv.innerHTML = `
+            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Equity</span><span class="font-mono text-lg">${formatCurrency(data.portfolio_value)}</span></div>
+            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Cash</span><span class="font-mono text-lg">${formatCurrency(data.cash)}</span></div>
+            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Positions</span><span class="font-mono text-lg">${data.positions.length}</span></div>
+            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Today's P/L</span><span class="font-mono text-lg ${totalPL >= 0 ? 'text-green-400' : 'text-red-400'}">${formatCurrency(totalPL)}</span></div>`;
+    }
 
-    <script>
-        let chartInstance = null;
-        let tradeDetails = {};
+    function renderWatchlist(watchlist) {
+        const grid = document.getElementById('watchlist-grid'); if (!grid) return;
+        if (watchlist.error) { grid.innerHTML = `<p class="text-red-400 col-span-full">${watchlist.error}</p>`; return; }
+        grid.innerHTML = '';
+        if (watchlist.length === 0) { grid.innerHTML = `<div class="col-span-full text-center p-4 rounded-lg bg-slate-800/30"><p>No signal data for today.</p></div>`; return; }
+        watchlist.forEach(item => { const card = document.createElement('div'); card.className = 'bg-slate-800/20 border border-[var(--border-color)] p-3 rounded-lg cursor-pointer hover:border-[var(--accent-primary)]'; card.setAttribute('onclick', `openModal('${item.ticker}')`); card.innerHTML = `<div class="flex justify-between items-center"><h3 class="font-bold">${item.ticker}</h3><span class="font-mono text-sm">${formatCurrency(item.last_close || 0)}</span></div><div class="mt-3 flex justify-between items-center text-xs"><span class="font-semibold ${getSentimentColor(item.sentiment_label)}">${item.sentiment_label || 'Neutral'}</span><span class="font-bold px-2 py-1 rounded-md ${getSignalColor(item.live_signal)}">${(item.live_signal || 'NONE').replace('_', ' ')}</span></div>`; grid.appendChild(card); });
+    }
 
-        document.addEventListener('DOMContentLoaded', () => { 
-            setupTabs(); 
-            setupSidebar(); 
-            fetchSignalData(); 
-            fetchPortfolioData();
-            fetchNewsData();
-        });
+    function renderEquityCurve(data) {
+        const container = document.getElementById('equity-curve-chart'); if (!container) return;
+        if (data.error) { container.innerHTML = `<p class="text-red-400">${data.error}</p>`; return; }
+        if (equityChart) equityChart.remove();
+        equityChart = LightweightCharts.createChart(container, { width: container.clientWidth, height: container.clientHeight, layout: { background: { type: 'solid', color: 'transparent' }, textColor: 'var(--text-primary)' }, grid: { vertLines: { color: 'var(--border-color)' }, horzLines: { color: 'var(--border-color)' } } });
+        const lineSeries = equityChart.addLineSeries({ color: 'var(--accent-primary)', lineWidth: 2 });
+        lineSeries.setData(data);
+        equityChart.timeScale().fitContent();
+    }
+    
+    async function fetchAndRender(panelId, endpoint, renderer) { const element = document.getElementById(panelId); if(!element) return; try { element.innerHTML = 'Loading...'; const data = await fetchData(endpoint); renderer(data); } catch (e) { element.innerHTML = `<p class="text-red-400">Failed to load data: ${e.message}</p>`; console.error(`Error for ${panelId}:`, e); } }
+    
+    function renderHistory(trades) { const body = document.getElementById('history-table-body'); body.innerHTML = trades.map(t => `<tr class="border-b border-[var(--border-color)]"><td class="p-3 font-mono text-xs">${t.timestamp}</td><td class="p-3 font-bold">${t.ticker}</td><td class="p-3 ${t.action === 'BUY' ? 'text-green-400' : 'text-red-400'}">${t.action}</td><td class="p-3 font-mono">${(t.quantity || 0).toFixed(4)}</td><td class="p-3 font-mono">${formatCurrency(t.price)}</td><td class="p-3 text-slate-400">${t.trade_type}</td></tr>`).join(''); }
+    function renderAnalytics(stats) { const content = document.getElementById('analytics-content'); if (stats.error) { content.innerHTML = `<p class="text-red-400">${stats.error}</p>`; return; } content.innerHTML = `<div class="grid grid-cols-2 lg:grid-cols-3 gap-4">${Object.entries(stats).map(([k,v]) => { const fKey = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); let fVal; if (['net_pnl', 'avg_win', 'avg_loss', 'max_drawdown'].includes(k)) fVal = formatCurrency(v); else if (k.includes('rate')) fVal = `${Number(v).toFixed(2)}%`; else fVal = Number(v).toFixed(2); return `<div class="bg-slate-800/30 p-4 rounded-lg"><p class="text-sm text-[var(--text-secondary)]">${fKey}</p><p class="text-2xl font-bold font-mono">${fVal}</p></div>` }).join('')}</div>`; }
+    function renderCorrelation(data) { const content = document.getElementById('correlation-content'); if (data.error) { content.innerHTML = `<p class="text-amber-400">${data.error}</p>`; return; } content.innerHTML = `<div class="p-4 bg-slate-800/20 rounded-lg border"><h4 class="font-bold">AI Interpretation</h4><div class="prose prose-invert prose-sm max-w-none">${marked.parse(data.interpretation)}</div></div><div class="mt-6 overflow-x-auto"><h4 class="widget-title">Matrix</h4>${data.matrix_html}</div>`; }
+    
+    function openModal(ticker){ const modal=document.getElementById('chart-modal'); modal.classList.remove('hidden'); document.getElementById('modal-title').textContent=`${ticker} - Chart Analysis`; const chartContainer=document.getElementById('chart-container'); if(modalChart)modalChart.remove(); modalChart=LightweightCharts.createChart(chartContainer,{width:chartContainer.clientWidth,height:400,layout:{background:{type:'solid',color:'transparent'},textColor:'var(--text-primary)'},grid:{vertLines:{color:'var(--border-color)'},horzLines:{color:'var(--border-color)'}}}); const candleSeries=modalChart.addCandlestickSeries({upColor:'var(--accent-green)',downColor:'var(--accent-red)',borderDownColor:'var(--accent-red)',borderUpColor:'var(--accent-green)',wickDownColor:'var(--accent-red)',wickUpColor:'var(--accent-green)'}); fetchData(`/api/chart_data/${ticker}`).then(data=>{if(data.error)throw new Error(data.error); candleSeries.setData(data.candlestick_data); candleSeries.setMarkers(data.trade_markers); modalChart.timeScale().fitContent()}).catch(e=>{console.error("Chart Error:",e)})}
+    function closeModal(){ document.getElementById('chart-modal').classList.add('hidden'); }
+    
+    async function handleSendMessage(){const input=document.getElementById('chat-input');const message=input.value.trim();if(!message)return;addMessageToChat(message,'user');input.value='';if(/^[A-Z]{1,5}(-USD)?$/.test(message)){addMessageToChat(`Performing deep dive for ${message}...`,'ai');try{const data=await fetchData(`/api/deep_analysis/${message}`);document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.analysis,'ai',!!data.error)}catch(error){document.getElementById('chat-window').lastChild.remove();addMessageToChat(`Failed to get analysis for ${message}.`,'ai',true)}}else{addMessageToChat('...','ai');try{const data=await fetchData('/api/ask_gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.reply,'ai',!!data.error)}catch(error){document.getElementById('chat-window').lastChild.remove();addMessageToChat('Unable to connect to AI.','ai',true)}}}
+    
+    function connectLogSocket(){const logDiv=document.getElementById('logs-content');logDiv.innerHTML='';const socket=new WebSocket(`ws://${window.location.host}/ws_logs`);socket.onopen=()=>{logDiv.innerHTML+='<p class="text-green-400">Log stream connected.</p>'};socket.onclose=()=>{logDiv.innerHTML+='<p class="text-red-400">Log stream disconnected. Retrying...</p>';setTimeout(connectLogSocket,5000)};socket.onmessage=(event)=>{const span=document.createElement('span');span.textContent=event.data;logDiv.appendChild(span);logDiv.scrollTop=logDiv.scrollHeight}}
 
-        function setupSidebar() { const links = document.querySelectorAll('.sidebar-link'); const panels = document.querySelectorAll('.main-panel'); links.forEach(link => { link.addEventListener('click', (e) => { e.preventDefault(); links.forEach(l => l.classList.remove('active')); link.classList.add('active'); const targetId = link.id.replace('nav-', 'panel-'); panels.forEach(p => p.id === targetId ? p.classList.remove('hidden') : p.classList.add('hidden')); }); }); }
-        
-        async function fetchPortfolioData() { try { const response = await fetch('/portfolio-data'); if (!response.ok) { throw new Error(`HTTP error! status: ${response.status}`); } const portfolio = await response.json(); if (portfolio.error) { throw new Error(portfolio.error); } document.getElementById('portfolio-equity').textContent = `$${portfolio.equity.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`; const pnlEl = document.getElementById('portfolio-pnl'); pnlEl.textContent = `$${portfolio.pnl_today.toFixed(2)}`; pnlEl.style.color = portfolio.pnl_today >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'; const statusIndicator = document.getElementById('market-status-indicator'); if(portfolio.market_is_safe) { statusIndicator.innerHTML = `<span class="text-xl font-bold" style="color: var(--accent-green)">MARKET SAFE</span><p class="text-xs text-slate-500">New long trades are enabled</p>`; } else { statusIndicator.innerHTML = `<span class="text-xl font-bold" style="color: var(--accent-red)">RISK-OFF</span><p class="text-xs text-slate-500">New long trades are disabled</p>`; } const positionsTableBody = document.getElementById('positions-table-body'); if (portfolio.positions.length === 0) { positionsTableBody.innerHTML = `<tr><td colspan="5" class="text-center p-8 text-[var(--text-secondary)]">No open positions.</td></tr>`; } else { positionsTableBody.innerHTML = portfolio.positions.map(p => { const pnlColor = p.unrealized_pl >= 0 ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'; return `<tr class="border-b border-[var(--border-color)]"><td class="p-3 font-bold text-white">${p.symbol}</td><td class="p-3 font-mono">${p.qty}</td><td class="p-3 font-mono">$${p.avg_entry_price.toFixed(2)}</td><td class="p-3 font-mono">$${p.current_price.toFixed(2)}</td><td class="p-3 font-mono ${pnlColor}">$${p.unrealized_pl.toFixed(2)}</td></tr>`; }).join(''); } } catch (error) { console.error("Could not fetch portfolio data:", error); } }
-        
-        function setupTabs() { const tabs = document.querySelectorAll('.tab-button'); const contents = document.querySelectorAll('.tab-content'); tabs.forEach(tab => { tab.addEventListener('click', () => { tabs.forEach(t => t.classList.remove('active')); tab.classList.add('active'); const targetId = tab.id.replace('tab-', 'content-'); contents.forEach(c => c.id === targetId ? c.classList.remove('hidden') : c.classList.add('hidden')); }); }); }
-        
-        function showConfirmModal(side) { const symbol = document.getElementById('trade-symbol').value.toUpperCase(); const qty = document.getElementById('trade-qty').value; if (!symbol || !qty || qty <= 0) { alert("Please enter a valid symbol and quantity."); return; } tradeDetails = { symbol, qty, side }; document.getElementById('confirm-title').textContent = `Confirm ${side} Order`; document.getElementById('confirm-text').textContent = `Are you sure you want to ${side.toLowerCase()} ${qty} shares of ${symbol}?`; const confirmBtn = document.getElementById('confirm-button'); confirmBtn.className = `px-4 py-2 rounded-md font-semibold text-white ${side === 'BUY' ? 'bg-green-600' : 'bg-red-600'}`; document.getElementById('confirm-modal').classList.remove('hidden'); }
-        function closeConfirmModal() { document.getElementById('confirm-modal').classList.add('hidden'); }
-        async function executeTrade() { closeConfirmModal(); try { const response = await fetch('/execute-trade', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(tradeDetails) }); const result = await response.json(); if (result.status === 'success') { alert(result.message); fetchPortfolioData(); } else { throw new Error(result.message); } } catch (error) { alert(`Trade failed: ${error.message}`); console.error("Trade execution error:", error); } }
+    document.addEventListener('DOMContentLoaded',()=>{
+        setupSidebar(); 
+        initializeDashboard();
+        fetchData('/api/daily_trade_plan').then(data => addMessageToChat(data.error || data.plan, 'ai', !!data.error));
+        const connectPriceSocket = () => { const socket=new WebSocket(`ws://${window.location.host}/ws_prices`);socket.onopen=()=>console.log("Price socket established.");socket.onclose=()=>{setTimeout(connectPriceSocket,5000)};socket.onerror=(error)=>console.error("Price socket error:",error);socket.onmessage=(event)=>{const data=JSON.parse(event.data);const symbol=data.symbol;const newPrice=data.price;if(portfolioState.positions[symbol]){const pos=portfolioState.positions[symbol];pos.current_price=newPrice;const normSymbol=symbol.replace('/','-');const priceCell=document.getElementById(`pos-price-${normSymbol}`);const plCell=document.getElementById(`pos-pl-${normSymbol}`);if(priceCell&&plCell){priceCell.textContent=formatCurrency(newPrice);const pnl=(newPrice-pos.avg_entry_price)*pos.qty;plCell.textContent=formatCurrency(pnl);plCell.style.color=pnl>=0?'var(--accent-green)':'text-[var(--accent-red)]';const row=document.getElementById(`pos-${normSymbol}`);const flashClass=newPrice>pos.avg_entry_price?'flash-green':'flash-red';if(row){row.classList.remove('flash-green','flash-red');void row.offsetWidth;row.classList.add(flashClass)}}}}}
+        connectPriceSocket();
 
-        function getSentimentDisplay(score) { if (score > 0.7) return { text: 'Very Positive', color: 'text-emerald-400' }; if (score > 0.3) return { text: 'Positive', color: 'text-emerald-600' }; if (score >= -0.3) return { text: 'Neutral', color: 'text-slate-400' }; if (score >= -0.7) return { text: 'Negative', color: 'text-rose-600' }; if (score < -0.7) return { text: 'Very Negative', color: 'text-rose-400' }; return { text: 'Neutral', color: 'text-slate-400' }; }
-        
-        async function fetchNewsData() { try { const response = await fetch('/sentiment_report.json'); if (!response.ok) { throw new Error('File not found'); } const newsData = await response.json(); const feed = document.getElementById('news-feed'); if (Object.keys(newsData).length === 0) { feed.innerHTML = `<p class="text-[var(--text-secondary)]">No news found.</p>`; return; } feed.innerHTML = Object.entries(newsData).map(([ticker, articleData]) => { const article = Array.isArray(articleData) ? articleData[0] : articleData; if (!article) return ''; const sentiment = getSentimentDisplay(article.sentiment_score); return `<div class="p-2 rounded-md hover:bg-slate-800/50"><div class="flex justify-between items-center"><span class="font-bold text-white">${ticker}</span><span class="text-xs font-semibold ${sentiment.color}">${sentiment.text}</span></div><p class="text-slate-400 text-xs mt-1">${article.headline}</p></div>`; }).join(''); } catch (error) { document.getElementById('news-feed').innerHTML = `<p class="text-amber-400 text-xs">Could not load news. Run news_analyzer.py</p>`; console.error("Could not fetch news:", error); } }
-        
-        async function fetchSignalData() { try { const response = await fetch('/signal_report.json'); if (!response.ok) { throw new Error('File not found'); } const data = await response.json(); renderCards(data.sma_signals, 'sma-container'); renderCards(data.rsi_signals, 'rsi-container'); renderCards(data.volatility_signals, 'volatility-container'); const allTickers = [ ...(data.sma_signals || []).map(s => s.ticker), ...(data.rsi_signals || []).map(s => s.ticker), ...(data.volatility_signals || []).map(s => s.ticker) ]; const uniqueTickers = [...new Set(allTickers)]; document.getElementById('ticker-list').innerHTML = uniqueTickers.map(ticker => `<option value="${ticker}"></option>`).join(''); } catch (error) { console.error("Error fetching signal data. Run daily_signal_report.py?", error); } }
-        
-        function renderCards(data, containerId) { const container = document.getElementById(containerId); if (!data || data.length === 0) { container.innerHTML = `<div class="col-span-full text-center p-8 rounded-lg text-[var(--text-secondary)]">No signals found.</div>`; return; } const statePriority = { "Bullish Crossover": 1, "Bearish Crossover": 1, "Oversold Exit (Buy)": 1, "Overbought Exit (Sell)": 1, "Breakout Signal": 1, "Approaching Bullish": 2, "Consolidating": 2, "Oversold": 2, "Overbought": 2, "Uptrend Active": 3, "Neutral": 3 }; data.sort((a, b) => (statePriority[a.signal_state] || 99) - (statePriority[b.signal_state] || 99) || b.proximity - a.proximity); container.innerHTML = data.map(item => { const proximity = Math.min(Math.max(item.proximity * 100, 0), 100); const stateConfig = { "Bullish Crossover": { label: "LIVE SIGNAL", color: "bg-[var(--accent-green)]", text: "CROSS" }, "Breakout Signal": { label: "LIVE SIGNAL", color: "bg-[var(--accent-green)]", text: "BREAKOUT" }, "Uptrend Active": { label: "Trend Active", color: "bg-green-800", text: "ACTIVE" }, "Approaching Bullish": { label: "Approaching Crossover", color: "bg-amber-500", text: `${proximity.toFixed(0)}%` }, "Consolidating": { label: "Consolidating", color: "bg-slate-600", text: `${proximity.toFixed(0)}%` }, "Default": { label: item.signal_state || "Status", color: "bg-slate-600", text: `${item.indicator_value.toFixed(1)}` } }; const config = stateConfig[item.signal_state] || stateConfig["Default"]; return `<div class="bg-slate-800/20 border border-[var(--border-color)] p-4 rounded-lg cursor-pointer hover:border-[var(--accent-primary)] transition-colors" onclick='openModal(${JSON.stringify(item)})'><div class="flex justify-between items-center"><h3 class="font-bold text-white">${item.ticker}</h3><span class="font-semibold text-slate-300">$${item.current_price.toFixed(2)}</span></div><div class="mt-3"><p class="text-xs text-slate-400 mb-1">${config.label}</p><div class="w-full bg-slate-700/50 rounded-full h-2"><div class="${config.color} h-2 rounded-full" style="width: ${proximity}%;"></div></div><p class="text-right text-xs font-medium text-white mt-1">${config.text}</p></div></div>`; }).join(''); }
-        
-        function parseMarkdown(text) { return text.replace(/### (.*)/g, '<h3 class="text-lg font-bold mt-4 mb-2">$1</h3>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>'); }
-        
-        async function sendChatMessage() { const input = document.getElementById('chat-input'); const question = input.value.trim(); if (!question) return; const messagesDiv = document.getElementById('chat-messages'); messagesDiv.innerHTML += `<div class="text-right"><p class="inline-block bg-indigo-600/80 rounded-lg px-4 py-3 text-sm">${question}</p></div>`; input.value = ''; messagesDiv.scrollTop = messagesDiv.scrollHeight; messagesDiv.innerHTML += `<div id="loading-bubble"><p class="inline-block bg-slate-700/80 rounded-lg px-4 py-3 text-sm">...</p></div>`; try { const response = await fetch('/ask-ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) }); const data = await response.json(); document.getElementById('loading-bubble').remove(); const formattedAnswer = parseMarkdown(data.answer); messagesDiv.innerHTML += `<div class="ai-response"><p class="inline-block bg-slate-700/80 rounded-lg px-4 py-3 text-sm">${formattedAnswer}</p></div>`; messagesDiv.scrollTop = messagesDiv.scrollHeight; } catch (error) { console.error("Chatbot API error:", error); document.getElementById('loading-bubble').remove(); messagesDiv.innerHTML += `<div><p class="inline-block bg-red-700/80 rounded-lg px-4 py-3 text-sm">Error connecting to AI.</p></div>`; } }
-        
-        function openModal(item) { document.getElementById('modal').classList.remove('hidden'); document.getElementById('modal-title').textContent = `${item.ticker} - Analysis`; document.getElementById('modal-details').innerHTML = `<p class="text-lg font-semibold text-white">State</p><p><strong>Signal:</strong> <span class="font-mono text-white">${item.signal_state}</span></p><p><strong>Price:</strong> <span class="font-mono text-white">$${item.current_price.toFixed(2)}</span></p><p class="mt-4 text-lg font-semibold text-white">Indicators</p><p><strong>${item.strategy === 'SMA' ? `Fast SMA` : `RSI`}:</strong> <span class="font-mono text-white">${item.indicator_value.toFixed(2)}</span></p><p><strong>${item.strategy === 'SMA' ? `Slow SMA` : `Oversold Line`}:</strong> <span class="font-mono text-white">${item.signal_line.toFixed(2)}</span></p>`; const ctx = document.getElementById('modal-chart').getContext('2d'); if (chartInstance) { chartInstance.destroy(); } let datasets = []; if (item.strategy === 'SMA') { datasets = [ { label: `Price`, type: 'line', data: item.chart_data.close, borderColor: '#475569', borderWidth: 1, yAxisID: 'y' }, { label: `Fast SMA`, type: 'line', data: item.chart_data.sma1, borderColor: 'var(--accent-primary)', borderWidth: 2.5, yAxisID: 'y', pointRadius: 0 }, { label: `Slow SMA`, type: 'line', data: item.chart_data.sma2, borderColor: 'var(--accent-red)', borderWidth: 2.5, yAxisID: 'y', pointRadius: 0 } ]; } else { datasets = [ { label: `RSI`, type: 'line', data: item.chart_data.rsi, borderColor: 'var(--accent-primary)', borderWidth: 2, yAxisID: 'y', pointRadius: 0 }, { label: 'Overbought', type: 'line', data: Array(item.chart_data.labels.length).fill(item.chart_data.overbought), borderColor: 'var(--accent-red)', borderWidth: 1.5, borderDash: [5, 5], yAxisID: 'y', pointRadius: 0 }, { label: 'Oversold', type: 'line', data: Array(item.chart_data.labels.length).fill(item.chart_data.oversold), borderColor: 'var(--accent-green)', borderWidth: 1.5, borderDash: [5, 5], yAxisID: 'y', pointRadius: 0 } ]; } chartInstance = new Chart(ctx, { type: 'bar', data: { labels: item.chart_data.labels, datasets: datasets }, options: { responsive: true, maintainAspectRatio: true, interaction: { mode: 'index', intersect: false }, scales: { x: { ticks: { color: 'var(--text-secondary)', maxRotation: 25, minRotation: 25 }, grid: { color: 'var(--border-color)' } }, y: { position: 'right', ticks: { color: 'var(--text-secondary)' }, grid: { color: 'var(--border-color)' } } }, plugins: { legend: { labels: { color: 'var(--text-primary)' } } } } }); }
-        
-        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
-    </script>
+        document.getElementById('nav-history').addEventListener('click', () => fetchAndRender('history-table-body', '/api/trade_history', renderHistory));
+        document.getElementById('nav-analytics').addEventListener('click', () => fetchAndRender('analytics-content', '/api/performance_stats', renderAnalytics));
+        document.getElementById('nav-correlation').addEventListener('click', () => fetchAndRender('correlation-content', '/api/correlation_matrix', renderCorrelation));
+        document.getElementById('nav-logs').addEventListener('click', connectLogSocket);
+        document.getElementById('export-trades-btn').addEventListener('click', () => window.location.href='/api/export/trades');
+        document.getElementById('analyze-button').addEventListener('click',async()=>{addMessageToChat('Analyzing manual trading...','ai');try{const data=await fetchData('/api/analyze_behavior');document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.analysis,'ai',!!data.error)}catch(e){document.getElementById('chat-window').lastChild.remove();addMessageToChat('Analysis failed.','ai',true)}});
+        document.getElementById('send-button').addEventListener('click',handleSendMessage);
+        document.getElementById('chat-input').addEventListener('keypress',(e)=>{if(e.key==='Enter')handleSendMessage()});
+        document.addEventListener('keydown', e => { if (document.activeElement.tagName === 'INPUT') return; const keyMap={'d':'nav-dashboard','p':'nav-positions','h':'nav-history','a':'nav-analytics','c':'nav-correlation','l':'nav-logs'}; if(keyMap[e.key]) document.getElementById(keyMap[e.key]).click(); });
+    });
+</script>
 </body>
 </html>
+
