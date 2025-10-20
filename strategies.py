@@ -1,22 +1,41 @@
 import pandas as pd
+import numpy as np # --- FIX: Import numpy for NaN checking ---
 from analysis_toolkit import get_sma, get_rsi
 
 def get_sma_signal(data, fast_period=50, slow_period=200):
     """Generates a BUY signal on a golden cross and a SELL signal on a death cross."""
     sma_fast = get_sma(data, fast_period)
     sma_slow = get_sma(data, slow_period)
-    if sma_fast.iloc[-1] > sma_slow.iloc[-1] and sma_fast.iloc[-2] <= sma_slow.iloc[-2]:
+    
+    # --- FIX: Add a check to ensure the SMA values are valid numbers before comparing ---
+    # This prevents errors if yfinance returns incomplete data for a ticker.
+    last_fast = sma_fast.iloc[-1]
+    prev_fast = sma_fast.iloc[-2]
+    last_slow = sma_slow.iloc[-1]
+    prev_slow = sma_slow.iloc[-2]
+
+    if np.isnan([last_fast, prev_fast, last_slow, prev_slow]).any():
+        return "HOLD" # Not enough data to make a decision
+
+    if last_fast > last_slow and prev_fast <= prev_slow:
         return "BUY"
-    elif sma_fast.iloc[-1] < sma_slow.iloc[-1] and sma_fast.iloc[-2] >= sma_slow.iloc[-2]:
+    elif last_fast < last_slow and prev_fast >= prev_slow:
         return "SELL" # SELL to go short
     return "HOLD"
 
 def get_rsi_signal(data, rsi_period=14, rsi_overbought=70, rsi_oversold=30):
     """Generates a BUY signal on oversold and a SELL signal on overbought."""
     rsi = get_rsi(data, rsi_period)
-    if rsi.iloc[-1] < rsi_oversold and rsi.iloc[-2] >= rsi_oversold:
+
+    # --- FIX: Add a NaN check for RSI as well ---
+    last_rsi = rsi.iloc[-1]
+    prev_rsi = rsi.iloc[-2]
+    if np.isnan([last_rsi, prev_rsi]).any():
+        return "HOLD"
+
+    if last_rsi < rsi_oversold and prev_rsi >= rsi_oversold:
         return "BUY"
-    elif rsi.iloc[-1] > rsi_overbought and rsi.iloc[-2] <= rsi_overbought:
+    elif last_rsi > rsi_overbought and prev_rsi <= rsi_overbought:
         return "SELL" # SELL to go short
     return "HOLD"
 
@@ -47,4 +66,3 @@ def get_pattern_breakout_signal(data, consolidation_period=20):
     elif data['Close'].iloc[-2] > recent_low and data['Close'].iloc[-1] < recent_low:
         return "SELL" # SELL to go short on a breakdown
     return "HOLD"
-

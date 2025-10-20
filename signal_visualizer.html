@@ -37,9 +37,55 @@
         .flash-red { animation: flash-red 0.7s ease-out; }
         #correlation-content table { width: 100%; border-collapse: collapse; }
         #correlation-content th, #correlation-content td { padding: 8px; text-align: center; border: 1px solid var(--border-color); }
+        
+        /* --- Mailbox Styles --- */
+        #mailbox-widget {
+            position: fixed;
+            top: 5vh; /* Aligns with the top of the main panels */
+            left: 2.5vw; /* Aligns with the left edge of the main content area */
+            z-index: 100;
+        }
+        .notification-badge {
+            position: absolute; top: -5px; right: -5px;
+            background-color: var(--accent-red); color: white;
+            border-radius: 9999px; font-size: 0.65rem;
+            width: 18px; height: 18px; line-height: 18px; text-align: center;
+            font-weight: bold; display: none;
+        }
+        #mailbox-dropdown {
+             position: fixed; /* Position relative to viewport */
+             top: calc(5vh + 74px); /* Position below the widget */
+             left: 2.5vw;
+             width: 400px;
+             max-height: 500px;
+             z-index: 99;
+        }
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(251, 113, 133, 0); }
+            50% { box-shadow: 0 0 20px rgba(251, 113, 133, 0.7); }
+        }
+        .glow {
+            animation: glow 1.5s infinite ease-in-out;
+        }
+
     </style>
 </head>
 <body class="flex items-center justify-center min-h-screen">
+    
+    <!-- FIX: Mailbox is now its own small panel positioned top-left -->
+    <div id="mailbox-widget" class="floating-panel rounded-2xl relative">
+        <button id="mailbox-button" title="Mailbox" class="text-slate-400 hover:text-white p-3 block">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+            <span id="notification-badge" class="notification-badge"></span>
+        </button>
+    </div>
+    
+    <!-- Dropdown is positioned absolutely relative to the viewport -->
+    <div id="mailbox-dropdown" class="floating-panel rounded-2xl flex-col p-4 hidden">
+        <h3 class="widget-title">Inbox</h3>
+        <div id="mailbox-content" class="overflow-y-auto space-y-2"></div>
+    </div>
+
     <div class="w-[95vw] h-[90vh] max-w-screen-2xl flex items-center gap-6">
         <nav class="floating-panel rounded-2xl flex-col items-center py-6 px-3 space-y-6 hidden sm:flex">
              <div class="w-10 h-10 bg-[var(--accent-primary)] rounded-lg flex items-center justify-center font-bold text-black text-xl">M</div>
@@ -75,13 +121,16 @@
         <aside class="floating-panel rounded-2xl w-full max-w-md h-full flex-col hidden lg:flex">
              <div class="p-4 border-b border-[var(--border-color)] flex justify-between items-center">
                 <h2 class="text-xl font-semibold text-white">Gemini AI Copilot</h2>
-                <button id="analyze-button" title="Analyze My Trading Behavior" class="text-slate-400 hover:text-white p-2 rounded-md hover:bg-slate-700/50"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></button>
+                <button id="analyze-button" title="Analyze My Trading Behavior" class="text-slate-400 hover:text-white p-2 rounded-md hover:bg-slate-700/50">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                </button>
              </div>
             <div id="chat-window" class="flex-1 p-4 space-y-4 overflow-y-auto"></div>
             <div class="p-4 border-t border-[var(--border-color)]"><div class="flex space-x-2"><input type="text" id="chat-input" class="flex-1 bg-slate-800/50 border border-[var(--border-color)] rounded-lg px-4 py-2" placeholder="Ask, or type a ticker for a deep dive..."><button id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Send</button></div></div>
         </aside>
     </div>
-    <div id="chart-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden"><div class="absolute inset-0 bg-black/50 backdrop-filter backdrop-blur-sm" onclick="closeModal()"></div><div class="relative w-full max-w-6xl floating-panel p-6 rounded-2xl"><button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl leading-none">&times;</button><h2 id="modal-title" class="widget-title text-xl font-bold text-white"></h2><div id="chart-container" class="mt-4 h-96"></div></div></div>
+
+    <div id="chart-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden"><div class="absolute inset-0 bg-black/50 backdrop-filter backdrop-blur-sm" onclick="closeModal()"></div><div class="relative w-full max-w-6xl floating-panel p-6 rounded-2xl"><button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl leading-none">&times;</button><h2 id="modal-title" class="widget-title text-xl font-bold text-white"></h2><div id="chart-container" class="mt-4 h-[70vh]"></div></div></div>
 <script>
     let portfolioState = {}, equityChart = null, modalChart = null;
     const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
@@ -137,30 +186,104 @@
     
     async function fetchAndRender(panelId, endpoint, renderer) { const element = document.getElementById(panelId); if(!element) return; try { element.innerHTML = 'Loading...'; const data = await fetchData(endpoint); renderer(data); } catch (e) { element.innerHTML = `<p class="text-red-400">Failed to load data: ${e.message}</p>`; console.error(`Error for ${panelId}:`, e); } }
     
+    function renderPositions(positions) { const body = document.getElementById('positions-table-body'); if(positions.error){ body.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-400">${positions.error}</td></tr>`; return; } body.innerHTML = positions.map(p => { const pnl = p.unrealized_pl; const pnlColor = pnl >= 0 ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'; const normSymbol = p.symbol.replace('/','-'); return `<tr id="pos-${normSymbol}" class="border-b border-[var(--border-color)]"><td class="p-3 font-bold">${p.symbol}</td><td class="p-3 font-mono">${Number(p.qty).toFixed(4)}</td><td class="p-3 font-mono">${formatCurrency(p.avg_entry_price)}</td><td id="pos-price-${normSymbol}" class="p-3 font-mono">${formatCurrency(p.current_price)}</td><td id="pos-pl-${normSymbol}" class="p-3 font-mono ${pnlColor}">${formatCurrency(pnl)}</td></tr>`}).join(''); }
     function renderHistory(trades) { const body = document.getElementById('history-table-body'); body.innerHTML = trades.map(t => `<tr class="border-b border-[var(--border-color)]"><td class="p-3 font-mono text-xs">${t.timestamp}</td><td class="p-3 font-bold">${t.ticker}</td><td class="p-3 ${t.action === 'BUY' ? 'text-green-400' : 'text-red-400'}">${t.action}</td><td class="p-3 font-mono">${(t.quantity || 0).toFixed(4)}</td><td class="p-3 font-mono">${formatCurrency(t.price)}</td><td class="p-3 text-slate-400">${t.trade_type}</td></tr>`).join(''); }
     function renderAnalytics(stats) { const content = document.getElementById('analytics-content'); if (stats.error) { content.innerHTML = `<p class="text-red-400">${stats.error}</p>`; return; } content.innerHTML = `<div class="grid grid-cols-2 lg:grid-cols-3 gap-4">${Object.entries(stats).map(([k,v]) => { const fKey = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); let fVal; if (['net_pnl', 'avg_win', 'avg_loss', 'max_drawdown'].includes(k)) fVal = formatCurrency(v); else if (k.includes('rate')) fVal = `${Number(v).toFixed(2)}%`; else fVal = Number(v).toFixed(2); return `<div class="bg-slate-800/30 p-4 rounded-lg"><p class="text-sm text-[var(--text-secondary)]">${fKey}</p><p class="text-2xl font-bold font-mono">${fVal}</p></div>` }).join('')}</div>`; }
     function renderCorrelation(data) { const content = document.getElementById('correlation-content'); if (data.error) { content.innerHTML = `<p class="text-amber-400">${data.error}</p>`; return; } content.innerHTML = `<div class="p-4 bg-slate-800/20 rounded-lg border"><h4 class="font-bold">AI Interpretation</h4><div class="prose prose-invert prose-sm max-w-none">${marked.parse(data.interpretation)}</div></div><div class="mt-6 overflow-x-auto"><h4 class="widget-title">Matrix</h4>${data.matrix_html}</div>`; }
     
-    function openModal(ticker){ const modal=document.getElementById('chart-modal'); modal.classList.remove('hidden'); document.getElementById('modal-title').textContent=`${ticker} - Chart Analysis`; const chartContainer=document.getElementById('chart-container'); if(modalChart)modalChart.remove(); modalChart=LightweightCharts.createChart(chartContainer,{width:chartContainer.clientWidth,height:400,layout:{background:{type:'solid',color:'transparent'},textColor:'var(--text-primary)'},grid:{vertLines:{color:'var(--border-color)'},horzLines:{color:'var(--border-color)'}}}); const candleSeries=modalChart.addCandlestickSeries({upColor:'var(--accent-green)',downColor:'var(--accent-red)',borderDownColor:'var(--accent-red)',borderUpColor:'var(--accent-green)',wickDownColor:'var(--accent-red)',wickUpColor:'var(--accent-green)'}); fetchData(`/api/chart_data/${ticker}`).then(data=>{if(data.error)throw new Error(data.error); candleSeries.setData(data.candlestick_data); candleSeries.setMarkers(data.trade_markers); modalChart.timeScale().fitContent()}).catch(e=>{console.error("Chart Error:",e)})}
+    function openModal(ticker){ const modal=document.getElementById('chart-modal'); modal.classList.remove('hidden'); document.getElementById('modal-title').textContent=`${ticker} - Chart Analysis`; const chartContainer=document.getElementById('chart-container'); if(modalChart)modalChart.remove(); modalChart=LightweightCharts.createChart(chartContainer,{width:chartContainer.clientWidth,height:chartContainer.clientHeight,layout:{background:{type:'solid',color:'transparent'},textColor:'var(--text-primary)'},grid:{vertLines:{color:'var(--border-color)'},horzLines:{color:'var(--border-color)'}}}); const candleSeries=modalChart.addCandlestickSeries({upColor:'var(--accent-green)',downColor:'var(--accent-red)',borderDownColor:'var(--accent-red)',borderUpColor:'var(--accent-green)',wickDownColor:'var(--accent-red)',wickUpColor:'var(--accent-green)'}); fetchData(`/api/chart_data/${ticker}`).then(data=>{if(data.error)throw new Error(data.error); candleSeries.setData(data.candlestick_data); candleSeries.setMarkers(data.trade_markers); modalChart.timeScale().fitContent()}).catch(e=>{console.error("Chart Error:",e)})}
     function closeModal(){ document.getElementById('chart-modal').classList.add('hidden'); }
     
     async function handleSendMessage(){const input=document.getElementById('chat-input');const message=input.value.trim();if(!message)return;addMessageToChat(message,'user');input.value='';if(/^[A-Z]{1,5}(-USD)?$/.test(message)){addMessageToChat(`Performing deep dive for ${message}...`,'ai');try{const data=await fetchData(`/api/deep_analysis/${message}`);document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.analysis,'ai',!!data.error)}catch(error){document.getElementById('chat-window').lastChild.remove();addMessageToChat(`Failed to get analysis for ${message}.`,'ai',true)}}else{addMessageToChat('...','ai');try{const data=await fetchData('/api/ask_gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.reply,'ai',!!data.error)}catch(error){document.getElementById('chat-window').lastChild.remove();addMessageToChat('Unable to connect to AI.','ai',true)}}}
     
     function connectLogSocket(){const logDiv=document.getElementById('logs-content');logDiv.innerHTML='';const socket=new WebSocket(`ws://${window.location.host}/ws_logs`);socket.onopen=()=>{logDiv.innerHTML+='<p class="text-green-400">Log stream connected.</p>'};socket.onclose=()=>{logDiv.innerHTML+='<p class="text-red-400">Log stream disconnected. Retrying...</p>';setTimeout(connectLogSocket,5000)};socket.onmessage=(event)=>{const span=document.createElement('span');span.textContent=event.data;logDiv.appendChild(span);logDiv.scrollTop=logDiv.scrollHeight}}
 
+    async function fetchAndRenderMailbox() {
+        try {
+            const messages = await fetchData('/api/mailbox');
+            const unreadMessages = messages.filter(m => m.status === 'unread');
+            const badge = document.getElementById('notification-badge');
+            const contentDiv = document.getElementById('mailbox-content');
+            const mailboxButton = document.getElementById('mailbox-button');
+            
+            if (unreadMessages.length > 0) {
+                badge.textContent = unreadMessages.length;
+                badge.style.display = 'block';
+                mailboxButton.classList.add('glow');
+            } else {
+                badge.style.display = 'none';
+                mailboxButton.classList.remove('glow');
+            }
+
+            if (messages.length === 0) {
+                 contentDiv.innerHTML = `<p class="text-sm text-center p-4 text-slate-400">No messages yet.</p>`;
+                 return;
+            }
+
+            contentDiv.innerHTML = messages.map(msg => `
+                <div class="p-3 rounded-lg border border-[var(--border-color)] ${msg.status === 'unread' ? 'bg-slate-700/50' : 'bg-slate-800/30'} cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden');">
+                    <p class="font-bold text-sm">${msg.subject}</p>
+                    <p class="text-xs text-slate-400">${new Date(msg.timestamp).toLocaleString()}</p>
+                </div>
+                <div class="prose prose-invert prose-sm max-w-none p-4 hidden">
+                    ${marked.parse(msg.content)}
+                </div>
+            `).join('');
+
+        } catch (error) {
+            console.error("Failed to fetch mailbox:", error);
+        }
+    }
+
+    async function markMessagesAsRead() {
+        const badge = document.getElementById('notification-badge');
+        const mailboxButton = document.getElementById('mailbox-widget').querySelector('button');
+        if (!badge.textContent || parseInt(badge.textContent) === 0) return;
+
+        const unreadMessages = await fetchData('/api/mailbox').then(msgs => msgs.filter(m => m.status === 'unread'));
+        const unreadIds = unreadMessages.map(m => m.id);
+
+        if (unreadIds.length > 0) {
+            await fetchData('/api/mailbox/mark_read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: unreadIds })
+            });
+            badge.style.display = 'none';
+            mailboxButton.classList.remove('glow');
+            document.querySelectorAll('#mailbox-content > div:nth-child(odd)').forEach(el => {
+                el.classList.remove('bg-slate-700/50');
+                el.classList.add('bg-slate-800/30');
+            });
+        }
+    }
+
     document.addEventListener('DOMContentLoaded',()=>{
         setupSidebar(); 
         initializeDashboard();
-        fetchData('/api/daily_trade_plan').then(data => addMessageToChat(data.error || data.plan, 'ai', !!data.error));
+        fetchAndRenderMailbox();
+
         const connectPriceSocket = () => { const socket=new WebSocket(`ws://${window.location.host}/ws_prices`);socket.onopen=()=>console.log("Price socket established.");socket.onclose=()=>{setTimeout(connectPriceSocket,5000)};socket.onerror=(error)=>console.error("Price socket error:",error);socket.onmessage=(event)=>{const data=JSON.parse(event.data);const symbol=data.symbol;const newPrice=data.price;if(portfolioState.positions[symbol]){const pos=portfolioState.positions[symbol];pos.current_price=newPrice;const normSymbol=symbol.replace('/','-');const priceCell=document.getElementById(`pos-price-${normSymbol}`);const plCell=document.getElementById(`pos-pl-${normSymbol}`);if(priceCell&&plCell){priceCell.textContent=formatCurrency(newPrice);const pnl=(newPrice-pos.avg_entry_price)*pos.qty;plCell.textContent=formatCurrency(pnl);plCell.style.color=pnl>=0?'var(--accent-green)':'text-[var(--accent-red)]';const row=document.getElementById(`pos-${normSymbol}`);const flashClass=newPrice>pos.avg_entry_price?'flash-green':'flash-red';if(row){row.classList.remove('flash-green','flash-red');void row.offsetWidth;row.classList.add(flashClass)}}}}}
         connectPriceSocket();
 
+        document.getElementById('nav-positions').addEventListener('click', () => fetchAndRender('positions-table-body', '/api/portfolio_status', (data) => renderPositions(data.positions)));
         document.getElementById('nav-history').addEventListener('click', () => fetchAndRender('history-table-body', '/api/trade_history', renderHistory));
         document.getElementById('nav-analytics').addEventListener('click', () => fetchAndRender('analytics-content', '/api/performance_stats', renderAnalytics));
         document.getElementById('nav-correlation').addEventListener('click', () => fetchAndRender('correlation-content', '/api/correlation_matrix', renderCorrelation));
         document.getElementById('nav-logs').addEventListener('click', connectLogSocket);
         document.getElementById('export-trades-btn').addEventListener('click', () => window.location.href='/api/export/trades');
+        
+        const mailboxButton = document.getElementById('mailbox-button');
+        const mailboxDropdown = document.getElementById('mailbox-dropdown');
+        mailboxButton.addEventListener('click', () => {
+            mailboxDropdown.classList.toggle('hidden');
+            if (!mailboxDropdown.classList.contains('hidden')) {
+                markMessagesAsRead();
+            }
+        });
+
         document.getElementById('analyze-button').addEventListener('click',async()=>{addMessageToChat('Analyzing manual trading...','ai');try{const data=await fetchData('/api/analyze_behavior');document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.analysis,'ai',!!data.error)}catch(e){document.getElementById('chat-window').lastChild.remove();addMessageToChat('Analysis failed.','ai',true)}});
+        
         document.getElementById('send-button').addEventListener('click',handleSendMessage);
         document.getElementById('chat-input').addEventListener('keypress',(e)=>{if(e.key==='Enter')handleSendMessage()});
         document.addEventListener('keydown', e => { if (document.activeElement.tagName === 'INPUT') return; const keyMap={'d':'nav-dashboard','p':'nav-positions','h':'nav-history','a':'nav-analytics','c':'nav-correlation','l':'nav-logs'}; if(keyMap[e.key]) document.getElementById(keyMap[e.key]).click(); });

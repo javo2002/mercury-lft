@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 import json
-import yfinance as yf
 import pandas as pd
 
 # --- CONFIGURATION ---
@@ -40,6 +39,8 @@ def generate_daily_trade_plan(market_condition, signals, events):
     response = model.generate_content(prompt)
     return response.text
 
+# --- FIX: Removed yfinance dependency ---
+# This function now only uses the AI's internal knowledge and real-time search.
 def get_deep_analysis(ticker):
     """
     Performs a multi-faceted deep analysis of a single ticker using AI.
@@ -48,14 +49,15 @@ def get_deep_analysis(ticker):
     model = genai.GenerativeModel('gemini-pro-latest')
     prompt = f"""
     You are a world-class equity research analyst. Conduct a "Deep Dive" analysis for the stock ticker "{ticker}".
+    Leverage your internal knowledge and real-time search capabilities to gather the information.
     Generate a report with the following sections using markdown formatting.
 
     ### 1. Multi-Source News Summary
-    - Find the top 3-5 significant news headlines from the past 48 hours from financial news outlets.
+    - Find the top 3-5 significant news headlines from the past 48 hours from major financial news outlets.
     - Summarize the key narrative points into a single paragraph.
 
     ### 2. Social Media Sentiment
-    - Analyze recent sentiment for ${ticker} on platforms like Twitter and StockTwits.
+    - Analyze recent sentiment for ${ticker} on platforms like X (formerly Twitter) and StockTwits.
     - Classify the sentiment as Positive, Negative, or Mixed, and mention any trending topics.
 
     ### 3. Insider Activity

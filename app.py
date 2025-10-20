@@ -7,13 +7,18 @@ from dotenv import load_dotenv
 import alpaca_trade_api as tradeapi
 import sqlite3
 import pandas as pd
-import yfinance as yf
 from risk_manager import get_market_condition
 import ai_services
 import performance_calculator
 import json
 from io import StringIO
-from datetime import datetime
+from datetime import datetime, timedelta
+
+# --- FIX: Import Alpaca Data Client ---
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
+
 
 # --- CONFIGURATION & LOGGING ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -65,20 +70,37 @@ def get_performance_stats(sock=None):
         logging.error(f"Error in /api/performance_stats: {e}")
         return jsonify({'error': str(e)}), 500
 
+# --- FIX: Rewritten to use Alpaca API for reliability ---
 @app.route('/api/chart_data/<ticker>')
 def get_chart_data(ticker, sock=None):
     logging.info(f"API call: /api/chart_data/{ticker}")
     try:
-        data = yf.download(ticker, period="2y", progress=False)
-        if data.empty: return jsonify({'error': 'No historical data found'}), 404
+        data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
+        request_params = StockBarsRequest(
+            symbol_or_symbols=[ticker],
+            timeframe=TimeFrame.Day,
+            start=datetime.now() - timedelta(days=730) # 2 years of data
+        )
+        bars = data_client.get_stock_bars(request_params).df
+        
+        if bars.empty: return jsonify({'error': 'No historical data found'}), 404
+        
+        # Data is multi-indexed by (symbol, timestamp), reset to get columns
+        data = bars.reset_index()
+        data.rename(columns={'timestamp': 'time'}, inplace=True)
+        data['time'] = data['time'].dt.strftime('%Y-%m-%d') # Format for chart library
+
         conn = get_db_connection()
         trades = conn.execute("SELECT timestamp, action, price FROM trades WHERE ticker = ?", (ticker,)).fetchall()
         conn.close()
         trade_markers = [{'time': pd.to_datetime(t['timestamp']).strftime('%Y-%m-%d'), 'position': 'aboveBar' if t['action']=='SELL' else 'belowBar', 'color': '#fb7185' if t['action']=='SELL' else '#34d399', 'shape': 'arrowDown' if t['action']=='SELL' else 'arrowUp', 'text': f"{t['action']} @ {t['price']:.2f}"} for t in trades]
-        data.reset_index(inplace=True)
-        chart_data = data.rename(columns={"Date": "time", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume":"volume"})
-        logging.info(f"Successfully fetched chart data for {ticker}.")
-        return jsonify({'candlestick_data': chart_data.to_dict(orient='records'),'trade_markers': trade_markers,'volume_data': chart_data[['time', 'volume']].to_dict(orient='records')})
+        
+        logging.info(f"Successfully fetched chart data for {ticker} from Alpaca.")
+        return jsonify({
+            'candlestick_data': data.to_dict(orient='records'),
+            'trade_markers': trade_markers,
+            'volume_data': data[['time', 'volume']].to_dict(orient='records')
+        })
     except Exception as e:
         logging.error(f"Error in /api/chart_data/{ticker}: {e}")
         return jsonify({'error': str(e)}), 500
@@ -142,16 +164,25 @@ def get_deep_analysis_route(ticker, sock=None):
         logging.error(f"Error in /api/deep_analysis/{ticker}: {e}")
         return jsonify({'error': str(e)}), 500
 
+# --- FIX: Rewritten to use Alpaca API for reliability ---
 @app.route('/api/correlation_matrix')
 def get_correlation_matrix(sock=None):
     logging.info("API call: /api/correlation_matrix")
     try:
         api = get_alpaca_api()
         positions = api.list_positions()
-        tickers = [p.symbol.replace('/', '-') for p in positions]
+        tickers = [p.symbol for p in positions]
         if len(tickers) < 2:
             return jsonify({'error': 'Need at least 2 positions to calculate correlation.'})
-        data = yf.download(tickers, period="3mo", progress=False)['Adj Close']
+
+        data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
+        request_params = StockBarsRequest(
+            symbol_or_symbols=tickers,
+            timeframe=TimeFrame.Day,
+            start=datetime.now() - timedelta(days=90) # 3 months of data
+        )
+        data = data_client.get_stock_bars(request_params).df['close'].unstack(level=0)
+        
         returns = data.pct_change().dropna()
         corr_matrix = returns.corr()
         interpretation = ai_services.interpret_correlation_matrix(corr_matrix)
@@ -277,4 +308,3 @@ def log_stream(ws):
 # --- MAIN EXECUTION ---
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=False)
-

@@ -3,52 +3,88 @@ import os
 
 DATABASE_FILE = 'trading_data.db'
 
-def run_migrations():
-    """Adds new columns/tables to the database tables if they don't exist."""
+def create_database():
+    """Initializes or updates all tables in the database."""
     try:
         conn = sqlite3.connect(DATABASE_FILE)
         cursor = conn.cursor()
-        
-        # --- Create Events Table ---
+
+        # --- Main Tables ---
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS signals (
+            ticker TEXT,
+            asset_class TEXT DEFAULT 'stock',
+            date TEXT,
+            sma_signal TEXT,
+            rsi_signal TEXT,
+            volatility_signal TEXT,
+            pattern_signal TEXT,
+            live_signal TEXT,
+            last_close REAL,
+            PRIMARY KEY (ticker, date)
+        )
+        ''')
+        print("- 'signals' table checked/created.")
+
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS trades (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            ticker TEXT,
+            asset_class TEXT DEFAULT 'stock',
+            action TEXT,
+            quantity REAL,
+            price REAL,
+            reason TEXT,
+            trade_type TEXT,
+            stop_price REAL
+        )
+        ''')
+        print("- 'trades' table checked/created.")
+
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sentiment (
+            ticker TEXT,
+            date TEXT,
+            sentiment_score REAL,
+            sentiment_label TEXT,
+            keywords TEXT,
+            top_headline TEXT,
+            PRIMARY KEY (ticker, date)
+        )
+        ''')
+        print("- 'sentiment' table checked/created.")
+
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT NOT NULL,
             ticker TEXT NOT NULL,
-            event_type TEXT NOT NULL, -- e.g., 'EARNINGS_BEAT', 'FDA_APPROVAL'
+            event_type TEXT NOT NULL,
             headline TEXT,
             source_url TEXT,
-            status TEXT DEFAULT 'new' -- 'new', 'processed'
+            status TEXT DEFAULT 'new'
         )
         ''')
         print("- 'events' table checked/created.")
 
-        # --- Migration for 'trades' table ---
-        cursor.execute("PRAGMA table_info(trades)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'stop_price' not in columns:
-            cursor.execute("ALTER TABLE trades ADD COLUMN stop_price REAL")
-        if 'asset_class' not in columns:
-            cursor.execute("ALTER TABLE trades ADD COLUMN asset_class TEXT DEFAULT 'stock'")
+        # --- NEW: Mailbox Table ---
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS mailbox (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            content TEXT NOT NULL,
+            status TEXT DEFAULT 'unread' -- 'unread' or 'read'
+        )
+        ''')
+        print("- 'mailbox' table checked/created.")
 
-        # --- Migration for 'signals' table ---
-        cursor.execute("PRAGMA table_info(signals)")
-        columns = [info[1] for info in cursor.fetchall()]
-        if 'asset_class' not in columns:
-            cursor.execute("ALTER TABLE signals ADD COLUMN asset_class TEXT DEFAULT 'stock'")
-        
-        print("\nMigrations check complete.")
+        print("\nDatabase setup/update complete.")
         conn.commit()
         conn.close()
     except sqlite3.Error as e:
-        print(f"Database migration error: {e}")
-
-def create_database():
-    """Initializes or updates all tables in the database."""
-    # ... (This function remains largely the same, just ensure all tables are created with IF NOT EXISTS) ...
-    print("Database table check complete.")
-    run_migrations()
+        print(f"Database error: {e}")
 
 if __name__ == '__main__':
     create_database()
-

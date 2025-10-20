@@ -12,7 +12,7 @@ DATABASE_FILE = 'trading_data.db'
 TICKER_LIST_FILES = [
     'trend_screener_results.txt',
     'reversion_screener_results.txt',
-    'volatility_screener_results.txt'
+    'volatility_screener_results.txt' # --- FIX: Corrected to match screener output ---
 ]
 
 def get_all_tickers():
@@ -33,7 +33,8 @@ def analyze_sentiment_with_ai(ticker):
     """
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-pro')
+        # --- FIX: Updated model name from 'gemini-pro' to the current version ---
+        model = genai.GenerativeModel('gemini-pro-latest')
 
         prompt = f"""
         Analyze the most recent, significant financial news for the stock ticker "{ticker}" from the last 24 hours.
@@ -101,3 +102,4 @@ def run_news_analysis():
 
 if __name__ == "__main__":
     run_news_analysis()
+
