@@ -14,279 +14,289 @@
             --text-primary: #f9fafb; --text-secondary: #a1a1aa; --accent-primary: #aaa;
             --accent-green: #34d399; --accent-red: #fb7185;
         }
-        body { 
-            font-family: 'Inter', sans-serif; 
+        body {
+            font-family: 'Inter', sans-serif;
             background-image: url('https://images.unsplash.com/photo-1657978837950-03646a7c7b9e?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=2832');
-            background-size: cover; background-position: center; background-attachment: fixed;
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
             color: var(--text-primary);
         }
         .floating-panel {
-            background-color: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-color); box-shadow: 0 16px 60px 0 rgba(0, 0, 0, 0.5);
+            background-color: var(--bg-glass);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 16px 60px 0 rgba(0, 0, 0, 0.5);
         }
-        .widget-title { 
-            font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem; 
-            border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; 
+        .widget-title {
+            font-weight: 500; color: var(--text-secondary); margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;
             font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em;
         }
         .sidebar-link.active { color: var(--accent-primary); background-color: rgba(255,255,255,0.05); }
         .ai-chat-bubble { border: 1px solid var(--border-color); background: rgba(30, 41, 59, 0.6); }
-        @keyframes flash-green { 0% { background-color: transparent; } 50% { background-color: rgba(52, 211, 153, 0.3); } 100% { background-color: transparent; } }
-        @keyframes flash-red { 0% { background-color: transparent; } 50% { background-color: rgba(251, 113, 133, 0.3); } 100% { background-color: transparent; } }
-        .flash-green { animation: flash-green 0.7s ease-out; }
-        .flash-red { animation: flash-red 0.7s ease-out; }
-        #correlation-content table { width: 100%; border-collapse: collapse; }
-        #correlation-content th, #correlation-content td { padding: 8px; text-align: center; border: 1px solid var(--border-color); }
-        
-        /* --- Mailbox Styles --- */
-        #mailbox-widget {
-            position: fixed;
-            top: 5vh; /* Aligns with the top of the main panels */
-            left: 2.5vw; /* Aligns with the left edge of the main content area */
-            z-index: 100;
-        }
-        .notification-badge {
-            position: absolute; top: -5px; right: -5px;
-            background-color: var(--accent-red); color: white;
-            border-radius: 9999px; font-size: 0.65rem;
-            width: 18px; height: 18px; line-height: 18px; text-align: center;
-            font-weight: bold; display: none;
-        }
-        #mailbox-dropdown {
-             position: fixed; /* Position relative to viewport */
-             top: calc(5vh + 74px); /* Position below the widget */
-             left: 2.5vw;
-             width: 400px;
-             max-height: 500px;
-             z-index: 99;
-        }
-        @keyframes glow {
-            0%, 100% { box-shadow: 0 0 5px rgba(251, 113, 133, 0); }
-            50% { box-shadow: 0 0 20px rgba(251, 113, 133, 0.7); }
-        }
-        .glow {
-            animation: glow 1.5s infinite ease-in-out;
-        }
-
+        .ai-chat-bubble.user { background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.3); }
+        .prose { color: var(--text-primary); }
+        .prose h3 { color: var(--text-primary); }
+        .prose strong { color: var(--text-primary); }
     </style>
 </head>
-<body class="flex items-center justify-center min-h-screen">
-    
-    <!-- FIX: Mailbox is now its own small panel positioned top-left -->
-    <div id="mailbox-widget" class="floating-panel rounded-2xl relative">
-        <button id="mailbox-button" title="Mailbox" class="text-slate-400 hover:text-white p-3 block">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-            <span id="notification-badge" class="notification-badge"></span>
-        </button>
-    </div>
-    
-    <!-- Dropdown is positioned absolutely relative to the viewport -->
-    <div id="mailbox-dropdown" class="floating-panel rounded-2xl flex-col p-4 hidden">
-        <h3 class="widget-title">Inbox</h3>
-        <div id="mailbox-content" class="overflow-y-auto space-y-2"></div>
-    </div>
+<body class="flex items-center justify-center min-h-screen bg-black">
 
     <div class="w-[95vw] h-[90vh] max-w-screen-2xl flex items-center gap-6">
+        <!-- NAV Sidebar -->
         <nav class="floating-panel rounded-2xl flex-col items-center py-6 px-3 space-y-6 hidden sm:flex">
-             <div class="w-10 h-10 bg-[var(--accent-primary)] rounded-lg flex items-center justify-center font-bold text-black text-xl">M</div>
-            <a href="#" id="nav-dashboard" class="sidebar-link active p-3 rounded-lg" title="Dashboard (D)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg></a>
-            <a href="#" id="nav-positions" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Positions (P)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg></a>
+            <div class="w-10 h-10 bg-[var(--accent-primary)] rounded-lg flex items-center justify-center font-bold text-black text-xl">M</div>
+            <a href="#" id="nav-dashboard" class="sidebar-link active p-3 rounded-lg" title="Dashboard (D)"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg></a>
+            <a href="#" id="nav-positions" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Positions (P)"><svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M12 14a3 3 0 100-6 3 3 0 000 6z"></path></svg></a>
             <a href="#" id="nav-history" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Trade History (H)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></a>
             <a href="#" id="nav-analytics" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Analytics (A)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path stroke-linecap="round" stroke-linejoin="round" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg></a>
-            <a href="#" id="nav-correlation" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Correlation Matrix (C)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></a>
-            <a href="#" id="nav-logs" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="System Logs (L)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></a>
+            <a href="#" id="nav-research" class="sidebar-link p-3 text-slate-400 hover:text-white rounded-lg" title="Research (R)"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.37 3.414-1.414 3.414H4.828c-1.784 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg></a>
         </nav>
+
+        <!-- Main Content Area -->
         <main class="floating-panel rounded-2xl flex-1 h-full flex flex-col">
-            <div class="p-6 overflow-y-auto flex-1">
-                <div id="panel-dashboard" class="main-panel space-y-6">
-                     <header><h1 class="text-3xl font-bold text-white">Dashboard</h1></header>
-                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div class="lg:col-span-1 space-y-6">
-                            <div><h3 class="widget-title">Portfolio Summary</h3><div id="portfolio-summary" class="space-y-2 text-sm"></div></div>
-                            <div><h3 class="widget-title">Live Equity Curve</h3><div id="equity-curve-chart" class="w-full h-48"></div></div>
-                        </div>
-                        <div class="lg:col-span-2">
-                             <h3 class="widget-title">Signal Watchlist</h3>
-                             <div id="watchlist-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-                        </div>
-                    </div>
-                </div>
-                <div id="panel-positions" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">Open Positions</h1></header><div class="overflow-y-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3">Symbol</th><th>Qty</th><th>Avg Entry</th><th>Current Price</th><th>Unrealized P/L</th></tr></thead><tbody id="positions-table-body"></tbody></table></div></div>
-                <div id="panel-history" class="main-panel space-y-6 hidden"><header class="flex justify-between items-center"><h1 class="text-3xl font-bold text-white">Trade History</h1><button id="export-trades-btn" class="text-sm bg-slate-700/50 hover:bg-slate-700/80 px-3 py-1.5 rounded-md">Export CSV</button></header><div class="overflow-y-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3">Timestamp</th><th>Symbol</th><th>Action</th><th>Qty</th><th>Price</th><th>Type</th></tr></thead><tbody id="history-table-body"></tbody></table></div></div>
-                <div id="panel-analytics" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">Performance Analytics</h1></header><div id="analytics-content" class="text-sm">Loading...</div></div>
-                <div id="panel-correlation" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">Portfolio Correlation</h1></header><div id="correlation-content" class="text-sm">Loading...</div></div>
-                <div id="panel-logs" class="main-panel space-y-6 hidden"><header><h1 class="text-3xl font-bold text-white">System Logs</h1></header><div id="logs-content" class="text-xs font-mono bg-slate-900/50 p-4 rounded-lg h-[60vh] overflow-y-scroll"></div></div>
+            <div id="main-content" class="p-6 overflow-y-auto flex-1">
+                <!-- Content will be dynamically injected by JavaScript -->
             </div>
         </main>
+        
+        <!-- AI Copilot Sidebar -->
         <aside class="floating-panel rounded-2xl w-full max-w-md h-full flex-col hidden lg:flex">
-             <div class="p-4 border-b border-[var(--border-color)] flex justify-between items-center">
-                <h2 class="text-xl font-semibold text-white">Gemini AI Copilot</h2>
-                <button id="analyze-button" title="Analyze My Trading Behavior" class="text-slate-400 hover:text-white p-2 rounded-md hover:bg-slate-700/50">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                </button>
-             </div>
-            <div id="chat-window" class="flex-1 p-4 space-y-4 overflow-y-auto"></div>
-            <div class="p-4 border-t border-[var(--border-color)]"><div class="flex space-x-2"><input type="text" id="chat-input" class="flex-1 bg-slate-800/50 border border-[var(--border-color)] rounded-lg px-4 py-2" placeholder="Ask, or type a ticker for a deep dive..."><button id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Send</button></div></div>
+             <div class="p-4 border-b border-[var(--border-color)] flex justify-between items-center"><h2 class="text-xl font-semibold text-white">Gemini AI Copilot</h2></div>
+             <div id="chat-window" class="flex-1 p-4 space-y-4 overflow-y-auto"></div>
+             <div class="p-4 border-t border-[var(--border-color)]"><div class="flex space-x-2"><input type="text" id="chat-input" class="flex-1 bg-slate-800/50 border border-[var(--border-color)] rounded-lg px-4 py-2" placeholder="Type a ticker for a deep dive..."><button id="send-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg">Send</button></div></div>
         </aside>
     </div>
 
-    <div id="chart-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden"><div class="absolute inset-0 bg-black/50 backdrop-filter backdrop-blur-sm" onclick="closeModal()"></div><div class="relative w-full max-w-6xl floating-panel p-6 rounded-2xl"><button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-3xl leading-none">&times;</button><h2 id="modal-title" class="widget-title text-xl font-bold text-white"></h2><div id="chart-container" class="mt-4 h-[70vh]"></div></div></div>
 <script>
-    let portfolioState = {}, equityChart = null, modalChart = null;
+    // --- UTILITY FUNCTIONS ---
     const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
-    const getSignalColor = (sig) => sig?.includes('BUY') ? 'bg-green-600/80 text-white' : 'bg-slate-700/80 text-gray-300';
-    const getSentimentColor = (lbl) => (lbl === 'Positive' ? 'text-green-400' : lbl === 'Negative' ? 'text-red-400' : 'text-gray-400');
-    
-    async function fetchData(endpoint, options = {}) { const res = await fetch(endpoint, options); if (!res.ok) { const errorText = await res.text(); throw new Error(`API Error ${res.status}: ${errorText}`); } return res.json(); }
-    function addMessageToChat(msg, sender, isError = false) { const chatWindow = document.getElementById('chat-window'); if (!chatWindow) return; const wrapper = document.createElement('div'); wrapper.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`; const bubble = document.createElement('div'); bubble.className = `p-3 rounded-lg max-w-[80%] ${sender === 'user' ? 'bg-blue-600' : 'ai-chat-bubble'}`; if (isError) bubble.innerHTML = `<p class="text-red-400">${msg}</p>`; else if (sender === 'ai') bubble.innerHTML = marked.parse(msg); else bubble.textContent = msg; wrapper.appendChild(bubble); chatWindow.appendChild(wrapper); chatWindow.scrollTop = chatWindow.scrollHeight; }
+    const formatPercent = (val) => `${(val * 100).toFixed(2)}%`;
+    const formatNumber = (val) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
-    function setupSidebar() { document.querySelectorAll('.sidebar-link').forEach(link=>{link.addEventListener('click', (e)=>{e.preventDefault();document.querySelectorAll('.sidebar-link').forEach(l=>l.classList.remove('active'));link.classList.add('active');const targetId=link.id.replace('nav-','panel-');document.querySelectorAll('.main-panel').forEach(p=>p.id===targetId?p.classList.remove('hidden'):p.classList.add('hidden'))})})}
-    
-    async function initializeDashboard() {
-        const [portfolio, dashboard, equity] = await Promise.all([
-            fetchData('/api/portfolio_status').catch(e => ({error: `Portfolio: ${e.message}`})),
-            fetchData('/api/dashboard_data').catch(e => ({error: `Watchlist: ${e.message}`})),
-            fetchData('/api/equity_curve').catch(e => ({error: `Equity Curve: ${e.message}`}))
-        ]);
-        updatePortfolioWidgets(portfolio);
-        renderWatchlist(dashboard);
-        renderEquityCurve(equity);
-    }
-    
-    function updatePortfolioWidgets(data) {
-        const summaryDiv = document.getElementById('portfolio-summary');
-        if (!summaryDiv) return;
-        if (data.error) { summaryDiv.innerHTML = `<p class="text-red-400 p-2">${data.error}</p>`; return; }
-        portfolioState.cash = data.cash; portfolioState.positions = {}; data.positions.forEach(p => { portfolioState.positions[p.symbol] = { qty: p.qty, avg_entry_price: p.avg_entry_price, current_price: p.current_price }; });
-        let totalPL = data.positions.reduce((acc, p) => acc + p.unrealized_pl, 0);
-        summaryDiv.innerHTML = `
-            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Equity</span><span class="font-mono text-lg">${formatCurrency(data.portfolio_value)}</span></div>
-            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Cash</span><span class="font-mono text-lg">${formatCurrency(data.cash)}</span></div>
-            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Positions</span><span class="font-mono text-lg">${data.positions.length}</span></div>
-            <div class="flex justify-between items-baseline"><span class="text-[var(--text-secondary)]">Today's P/L</span><span class="font-mono text-lg ${totalPL >= 0 ? 'text-green-400' : 'text-red-400'}">${formatCurrency(totalPL)}</span></div>`;
+    async function fetchData(endpoint, options = {}) {
+        try {
+            const res = await fetch(endpoint, options);
+            if (!res.ok) { 
+                const errorData = await res.json().catch(() => ({error: 'Failed to fetch'}));
+                throw new Error(errorData.error);
+            }
+            return await res.json();
+        } catch (error) {
+            console.error(`Fetch error for ${endpoint}:`, error);
+            throw error;
+        }
     }
 
-    function renderWatchlist(watchlist) {
-        const grid = document.getElementById('watchlist-grid'); if (!grid) return;
-        if (watchlist.error) { grid.innerHTML = `<p class="text-red-400 col-span-full">${watchlist.error}</p>`; return; }
-        grid.innerHTML = '';
-        if (watchlist.length === 0) { grid.innerHTML = `<div class="col-span-full text-center p-4 rounded-lg bg-slate-800/30"><p>No signal data for today.</p></div>`; return; }
-        watchlist.forEach(item => { const card = document.createElement('div'); card.className = 'bg-slate-800/20 border border-[var(--border-color)] p-3 rounded-lg cursor-pointer hover:border-[var(--accent-primary)]'; card.setAttribute('onclick', `openModal('${item.ticker}')`); card.innerHTML = `<div class="flex justify-between items-center"><h3 class="font-bold">${item.ticker}</h3><span class="font-mono text-sm">${formatCurrency(item.last_close || 0)}</span></div><div class="mt-3 flex justify-between items-center text-xs"><span class="font-semibold ${getSentimentColor(item.sentiment_label)}">${item.sentiment_label || 'Neutral'}</span><span class="font-bold px-2 py-1 rounded-md ${getSignalColor(item.live_signal)}">${(item.live_signal || 'NONE').replace('_', ' ')}</span></div>`; grid.appendChild(card); });
-    }
+    // --- TEMPLATES FOR SPA ---
+    const panelTemplates = {
+        dashboard: `
+            <div class="space-y-6">
+                <header><h1 class="text-3xl font-bold text-white">Dashboard</h1></header>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 space-y-6">
+                        <div><h3 class="widget-title">Portfolio Summary</h3><div id="portfolio-summary"></div></div>
+                        <div><h3 class="widget-title">Live Equity Curve</h3><div id="equity-curve-chart" class="w-full h-40"></div></div>
+                    </div>
+                    <div class="lg:col-span-2"><h3 class="widget-title">Signal Watchlist</h3><div id="watchlist-grid"></div></div>
+                </div>
+            </div>`,
+        positions: `<div class="space-y-6"><header><h1 class="text-3xl font-bold text-white">Open Positions</h1></header><div class="overflow-y-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3">Symbol</th><th>Qty</th><th>Avg Entry</th><th>Current Price</th><th>Unrealized P/L</th></tr></thead><tbody id="positions-table-body"></tbody></table></div></div>`,
+        history: `<div class="space-y-6"><header><h1 class="text-3xl font-bold text-white">Trade History</h1></header><div class="overflow-y-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3">Timestamp</th><th>Symbol</th><th>Action</th><th>Qty</th><th>Price</th><th>Type</th></tr></thead><tbody id="history-table-body"></tbody></table></div></div>`,
+        analytics: `<div class="space-y-6"><header><h1 class="text-3xl font-bold text-white">Performance Analytics</h1></header><div id="analytics-content"></div></div>`,
+        research: `
+            <div class="space-y-6">
+                <header><h1 class="text-3xl font-bold text-white">Backtesting & Research</h1></header>
+                <div>
+                    <h3 class="widget-title">Run New Backtest</h3>
+                    <div class="bg-slate-800/20 p-4 rounded-lg grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                        <div>
+                            <label for="ticker-input" class="block text-sm font-medium text-slate-300">Ticker</label>
+                            <input type="text" id="ticker-input" value="SPY" class="mt-1 block w-full bg-slate-700/50 border border-[var(--border-color)] rounded-md py-2 px-3 text-sm">
+                        </div>
+                        <div>
+                            <label for="strategy-select" class="block text-sm font-medium text-slate-300">Strategy</label>
+                            <select id="strategy-select" class="mt-1 block w-full bg-slate-700/50 border border-[var(--border-color)] rounded-md py-2 px-3 text-sm"><option>SmaCross</option></select>
+                        </div>
+                        <button id="run-backtest-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg h-10">Run</button>
+                    </div>
+                </div>
+                <div><h3 class="widget-title">Backtest History</h3><div class="overflow-y-auto"><table class="w-full text-left text-sm"><thead class="sticky top-0 bg-[var(--bg-glass)] backdrop-blur-md"><tr><th class="p-3">Strategy</th><th>Sharpe</th><th>CAGR</th><th>Max Drawdown</th><th>Timestamp</th><th>Report</th></tr></thead><tbody id="backtest-results-body"></tbody></table></div></div>
+            </div>`
+    };
 
-    function renderEquityCurve(data) {
-        const container = document.getElementById('equity-curve-chart'); if (!container) return;
-        if (data.error) { container.innerHTML = `<p class="text-red-400">${data.error}</p>`; return; }
+    const mainContent = document.getElementById('main-content');
+    let equityChart = null;
+
+    // --- RENDER FUNCTIONS (FULLY IMPLEMENTED) ---
+    function renderPortfolioSummary(element, data) {
+        const totalPL = data.positions.reduce((acc, p) => acc + parseFloat(p.unrealized_pl), 0);
+        element.innerHTML = `<div class="space-y-2 text-sm">
+            <div class="flex justify-between items-baseline"><span class="text-slate-400">Equity</span><span class="font-mono text-lg">${formatCurrency(data.portfolio_value)}</span></div>
+            <div class="flex justify-between items-baseline"><span class="text-slate-400">Cash</span><span class="font-mono text-lg">${formatCurrency(data.cash)}</span></div>
+            <div class="flex justify-between items-baseline"><span class="text-slate-400">Positions</span><span class="font-mono text-lg">${data.positions.length}</span></div>
+            <div class="flex justify-between items-baseline"><span class="text-slate-400">Today's P/L</span><span class="font-mono text-lg ${totalPL >= 0 ? 'text-green-400' : 'text-red-400'}">${formatCurrency(totalPL)}</span></div>
+        </div>`;
+    }
+    
+    function renderEquityCurve(element, data) {
         if (equityChart) equityChart.remove();
-        equityChart = LightweightCharts.createChart(container, { width: container.clientWidth, height: container.clientHeight, layout: { background: { type: 'solid', color: 'transparent' }, textColor: 'var(--text-primary)' }, grid: { vertLines: { color: 'var(--border-color)' }, horzLines: { color: 'var(--border-color)' } } });
+        element.innerHTML = '';
+        equityChart = LightweightCharts.createChart(element, { width: element.clientWidth, height: 160, layout: { background: { type: 'solid', color: 'transparent' }, textColor: 'var(--text-primary)' }, grid: { vertLines: { visible: false }, horzLines: { color: 'rgba(255, 255, 255, 0.1)' } } });
         const lineSeries = equityChart.addLineSeries({ color: 'var(--accent-primary)', lineWidth: 2 });
         lineSeries.setData(data);
         equityChart.timeScale().fitContent();
     }
-    
-    async function fetchAndRender(panelId, endpoint, renderer) { const element = document.getElementById(panelId); if(!element) return; try { element.innerHTML = 'Loading...'; const data = await fetchData(endpoint); renderer(data); } catch (e) { element.innerHTML = `<p class="text-red-400">Failed to load data: ${e.message}</p>`; console.error(`Error for ${panelId}:`, e); } }
-    
-    function renderPositions(positions) { const body = document.getElementById('positions-table-body'); if(positions.error){ body.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-400">${positions.error}</td></tr>`; return; } body.innerHTML = positions.map(p => { const pnl = p.unrealized_pl; const pnlColor = pnl >= 0 ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'; const normSymbol = p.symbol.replace('/','-'); return `<tr id="pos-${normSymbol}" class="border-b border-[var(--border-color)]"><td class="p-3 font-bold">${p.symbol}</td><td class="p-3 font-mono">${Number(p.qty).toFixed(4)}</td><td class="p-3 font-mono">${formatCurrency(p.avg_entry_price)}</td><td id="pos-price-${normSymbol}" class="p-3 font-mono">${formatCurrency(p.current_price)}</td><td id="pos-pl-${normSymbol}" class="p-3 font-mono ${pnlColor}">${formatCurrency(pnl)}</td></tr>`}).join(''); }
-    function renderHistory(trades) { const body = document.getElementById('history-table-body'); body.innerHTML = trades.map(t => `<tr class="border-b border-[var(--border-color)]"><td class="p-3 font-mono text-xs">${t.timestamp}</td><td class="p-3 font-bold">${t.ticker}</td><td class="p-3 ${t.action === 'BUY' ? 'text-green-400' : 'text-red-400'}">${t.action}</td><td class="p-3 font-mono">${(t.quantity || 0).toFixed(4)}</td><td class="p-3 font-mono">${formatCurrency(t.price)}</td><td class="p-3 text-slate-400">${t.trade_type}</td></tr>`).join(''); }
-    function renderAnalytics(stats) { const content = document.getElementById('analytics-content'); if (stats.error) { content.innerHTML = `<p class="text-red-400">${stats.error}</p>`; return; } content.innerHTML = `<div class="grid grid-cols-2 lg:grid-cols-3 gap-4">${Object.entries(stats).map(([k,v]) => { const fKey = k.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()); let fVal; if (['net_pnl', 'avg_win', 'avg_loss', 'max_drawdown'].includes(k)) fVal = formatCurrency(v); else if (k.includes('rate')) fVal = `${Number(v).toFixed(2)}%`; else fVal = Number(v).toFixed(2); return `<div class="bg-slate-800/30 p-4 rounded-lg"><p class="text-sm text-[var(--text-secondary)]">${fKey}</p><p class="text-2xl font-bold font-mono">${fVal}</p></div>` }).join('')}</div>`; }
-    function renderCorrelation(data) { const content = document.getElementById('correlation-content'); if (data.error) { content.innerHTML = `<p class="text-amber-400">${data.error}</p>`; return; } content.innerHTML = `<div class="p-4 bg-slate-800/20 rounded-lg border"><h4 class="font-bold">AI Interpretation</h4><div class="prose prose-invert prose-sm max-w-none">${marked.parse(data.interpretation)}</div></div><div class="mt-6 overflow-x-auto"><h4 class="widget-title">Matrix</h4>${data.matrix_html}</div>`; }
-    
-    function openModal(ticker){ const modal=document.getElementById('chart-modal'); modal.classList.remove('hidden'); document.getElementById('modal-title').textContent=`${ticker} - Chart Analysis`; const chartContainer=document.getElementById('chart-container'); if(modalChart)modalChart.remove(); modalChart=LightweightCharts.createChart(chartContainer,{width:chartContainer.clientWidth,height:chartContainer.clientHeight,layout:{background:{type:'solid',color:'transparent'},textColor:'var(--text-primary)'},grid:{vertLines:{color:'var(--border-color)'},horzLines:{color:'var(--border-color)'}}}); const candleSeries=modalChart.addCandlestickSeries({upColor:'var(--accent-green)',downColor:'var(--accent-red)',borderDownColor:'var(--accent-red)',borderUpColor:'var(--accent-green)',wickDownColor:'var(--accent-red)',wickUpColor:'var(--accent-green)'}); fetchData(`/api/chart_data/${ticker}`).then(data=>{if(data.error)throw new Error(data.error); candleSeries.setData(data.candlestick_data); candleSeries.setMarkers(data.trade_markers); modalChart.timeScale().fitContent()}).catch(e=>{console.error("Chart Error:",e)})}
-    function closeModal(){ document.getElementById('chart-modal').classList.add('hidden'); }
-    
-    async function handleSendMessage(){const input=document.getElementById('chat-input');const message=input.value.trim();if(!message)return;addMessageToChat(message,'user');input.value='';if(/^[A-Z]{1,5}(-USD)?$/.test(message)){addMessageToChat(`Performing deep dive for ${message}...`,'ai');try{const data=await fetchData(`/api/deep_analysis/${message}`);document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.analysis,'ai',!!data.error)}catch(error){document.getElementById('chat-window').lastChild.remove();addMessageToChat(`Failed to get analysis for ${message}.`,'ai',true)}}else{addMessageToChat('...','ai');try{const data=await fetchData('/api/ask_gemini',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.reply,'ai',!!data.error)}catch(error){document.getElementById('chat-window').lastChild.remove();addMessageToChat('Unable to connect to AI.','ai',true)}}}
-    
-    function connectLogSocket(){const logDiv=document.getElementById('logs-content');logDiv.innerHTML='';const socket=new WebSocket(`ws://${window.location.host}/ws_logs`);socket.onopen=()=>{logDiv.innerHTML+='<p class="text-green-400">Log stream connected.</p>'};socket.onclose=()=>{logDiv.innerHTML+='<p class="text-red-400">Log stream disconnected. Retrying...</p>';setTimeout(connectLogSocket,5000)};socket.onmessage=(event)=>{const span=document.createElement('span');span.textContent=event.data;logDiv.appendChild(span);logDiv.scrollTop=logDiv.scrollHeight}}
 
-    async function fetchAndRenderMailbox() {
+    function renderWatchlist(element, data) {
+        if (data.length === 0) {
+            element.innerHTML = `<div class="text-center p-4 rounded-lg bg-slate-800/30"><p>No signals generated for today.</p></div>`;
+            return;
+        }
+        element.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">${data.map(item => `
+            <div class="bg-slate-800/20 border border-[var(--border-color)] p-3 rounded-lg">
+                <div class="flex justify-between items-center"><h3 class="font-bold">${item.ticker}</h3><span class="font-mono text-sm">${formatCurrency(item.last_close || 0)}</span></div>
+                <div class="mt-3 flex justify-between items-center text-xs">
+                    <span class="font-semibold ${item.sentiment_label === 'Positive' ? 'text-green-400' : item.sentiment_label === 'Negative' ? 'text-red-400' : 'text-gray-400'}">${item.sentiment_label || 'Neutral'}</span>
+                    <span class="font-bold px-2 py-1 rounded-md ${item.live_signal?.includes('BUY') ? 'bg-green-600/80 text-white' : 'bg-slate-700/80 text-gray-300'}">${(item.live_signal || 'NONE').replace('_', ' ')}</span>
+                </div>
+            </div>`).join('')}</div>`;
+    }
+
+    function renderPositions(element, data) {
+        if (data.length === 0) {
+            element.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">No open positions.</td></tr>`;
+            return;
+        }
+        element.innerHTML = data.map(p => {
+            const pnl = parseFloat(p.unrealized_pl);
+            return `<tr class="border-b border-[var(--border-color)]">
+                <td class="p-3 font-bold">${p.symbol}</td><td class="p-3 font-mono">${formatNumber(p.qty)}</td>
+                <td class="p-3 font-mono">${formatCurrency(p.avg_entry_price)}</td><td class="p-3 font-mono">${formatCurrency(p.current_price)}</td>
+                <td class="p-3 font-mono ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}">${formatCurrency(pnl)}</td></tr>`;
+        }).join('');
+    }
+
+    function renderHistory(element, trades) {
+        if (trades.length === 0) {
+            element.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">No trade history found.</td></tr>`;
+            return;
+        }
+        element.innerHTML = trades.map(t => `<tr class="border-b border-[var(--border-color)]">
+            <td class="p-3 font-mono text-xs">${new Date(t.timestamp).toLocaleString()}</td><td class="p-3 font-bold">${t.ticker}</td>
+            <td class="p-3 ${t.action === 'BUY' ? 'text-green-400' : 'text-red-400'}">${t.action}</td><td class="p-3 font-mono">${formatNumber(t.quantity)}</td>
+            <td class="p-3 font-mono">${formatCurrency(t.price)}</td><td class="p-3 text-slate-400">${t.trade_type}</td></tr>`).join('');
+    }
+
+    function renderAnalytics(element, stats) {
+        if (stats.error) {
+             element.innerHTML = `<div class="grid grid-cols-1"><p class="text-center text-amber-400 p-4">${stats.error}</p></div>`;
+             return;
+        }
+        element.innerHTML = `<div class="grid grid-cols-2 md:grid-cols-3 gap-4">${Object.entries(stats).map(([key, value]) => {
+            const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            let formattedValue;
+            if (['net_pnl','avg_win','avg_loss','max_drawdown'].includes(key)) { formattedValue = formatCurrency(value); }
+            else if (key.includes('rate') || key.includes('cagr')) { formattedValue = formatPercent(value); }
+            else { formattedValue = formatNumber(value); }
+            return `<div class="bg-slate-800/30 p-4 rounded-lg"><p class="text-sm text-slate-400">${formattedKey}</p><p class="text-2xl font-bold font-mono">${formattedValue}</p></div>`;
+        }).join('')}</div>`;
+    }
+    
+    function renderBacktestResults(element, results) {
+        if (!results || results.length === 0) {
+            element.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">No backtest results yet.</td></tr>`;
+            return;
+        }
+        element.innerHTML = results.map(r => `
+            <tr class="border-b border-[var(--border-color)]">
+                <td class="p-3 font-bold">${r.strategy_name}</td>
+                <td class="font-mono ${r.sharpe_ratio > 1 ? 'text-green-400' : 'text-slate-300'}">${formatNumber(r.sharpe_ratio)}</td>
+                <td class="font-mono">${formatPercent(r.cagr)}</td>
+                <td class="font-mono text-red-400">${formatPercent(r.max_drawdown)}</td>
+                <td class="font-mono text-xs text-slate-400">${new Date(r.timestamp).toLocaleString()}</td>
+                <td><a href="/${r.report_url}" target="_blank" class="text-sm text-blue-400 hover:underline">View Report</a></td>
+            </tr>
+        `).join('');
+    }
+    
+    // --- AI CHATBOT & NAVIGATION ---
+    const chatWindow = document.getElementById('chat-window');
+    const chatInput = document.getElementById('chat-input');
+    const sendButton = document.getElementById('send-button');
+
+    function addMessageToChat(content, isUser = false) {
+        const bubble = document.createElement('div');
+        bubble.className = `ai-chat-bubble p-3 rounded-lg max-w-full ${isUser ? 'user' : ''}`;
+        bubble.innerHTML = isUser ? `<p class="text-white text-right">${content}</p>` : marked.parse(content);
+        chatWindow.appendChild(bubble);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    async function handleSendMessage() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+        addMessageToChat(message, true);
+        chatInput.value = '';
+        addMessageToChat('<div class="italic text-slate-400">Gemini is thinking...</div>');
         try {
-            const messages = await fetchData('/api/mailbox');
-            const unreadMessages = messages.filter(m => m.status === 'unread');
-            const badge = document.getElementById('notification-badge');
-            const contentDiv = document.getElementById('mailbox-content');
-            const mailboxButton = document.getElementById('mailbox-button');
-            
-            if (unreadMessages.length > 0) {
-                badge.textContent = unreadMessages.length;
-                badge.style.display = 'block';
-                mailboxButton.classList.add('glow');
-            } else {
-                badge.style.display = 'none';
-                mailboxButton.classList.remove('glow');
-            }
-
-            if (messages.length === 0) {
-                 contentDiv.innerHTML = `<p class="text-sm text-center p-4 text-slate-400">No messages yet.</p>`;
-                 return;
-            }
-
-            contentDiv.innerHTML = messages.map(msg => `
-                <div class="p-3 rounded-lg border border-[var(--border-color)] ${msg.status === 'unread' ? 'bg-slate-700/50' : 'bg-slate-800/30'} cursor-pointer" onclick="this.nextElementSibling.classList.toggle('hidden');">
-                    <p class="font-bold text-sm">${msg.subject}</p>
-                    <p class="text-xs text-slate-400">${new Date(msg.timestamp).toLocaleString()}</p>
-                </div>
-                <div class="prose prose-invert prose-sm max-w-none p-4 hidden">
-                    ${marked.parse(msg.content)}
-                </div>
-            `).join('');
-
+            const response = await fetchData('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message }) });
+            chatWindow.removeChild(chatWindow.lastChild);
+            addMessageToChat(response.reply);
         } catch (error) {
-            console.error("Failed to fetch mailbox:", error);
+            chatWindow.removeChild(chatWindow.lastChild);
+            addMessageToChat(`<div class="text-red-400">Error: ${error.message}</div>`);
+        }
+    }
+    
+    async function fetchAndRender(elementId, endpoint, renderer) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+        element.innerHTML = '<p class="text-slate-400 text-center py-4">Loading...</p>';
+        try {
+            const data = await fetchData(endpoint);
+            renderer(element, data);
+        } catch (error) {
+            element.innerHTML = `<p class="text-red-400 text-center py-4">Error: ${error.message}</p>`;
         }
     }
 
-    async function markMessagesAsRead() {
-        const badge = document.getElementById('notification-badge');
-        const mailboxButton = document.getElementById('mailbox-widget').querySelector('button');
-        if (!badge.textContent || parseInt(badge.textContent) === 0) return;
-
-        const unreadMessages = await fetchData('/api/mailbox').then(msgs => msgs.filter(m => m.status === 'unread'));
-        const unreadIds = unreadMessages.map(m => m.id);
-
-        if (unreadIds.length > 0) {
-            await fetchData('/api/mailbox/mark_read', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids: unreadIds })
-            });
-            badge.style.display = 'none';
-            mailboxButton.classList.remove('glow');
-            document.querySelectorAll('#mailbox-content > div:nth-child(odd)').forEach(el => {
-                el.classList.remove('bg-slate-700/50');
-                el.classList.add('bg-slate-800/30');
-            });
+    function loadPanel(panelName) {
+        mainContent.innerHTML = panelTemplates[panelName];
+        if (panelName === 'dashboard') {
+            fetchAndRender('portfolio-summary', '/api/portfolio_status', renderPortfolioSummary);
+            fetchAndRender('equity-curve-chart', '/api/equity_curve', renderEquityCurve);
+            fetchAndRender('watchlist-grid', '/api/dashboard_data', renderWatchlist);
+        } else if (panelName === 'positions') {
+            fetchAndRender('positions-table-body', '/api/portfolio_status', (elem, data) => renderPositions(elem, data.positions));
+        } else if (panelName === 'history') {
+            fetchAndRender('history-table-body', '/api/trade_history', renderHistory);
+        } else if (panelName === 'analytics') {
+            fetchAndRender('analytics-content', '/api/performance_stats', renderAnalytics);
+        } else if (panelName === 'research') {
+            fetchAndRender('backtest-results-body', '/api/research/backtest_results', renderBacktestResults);
+            // In a real app you would populate this dynamically
+            // document.getElementById('run-backtest-btn').addEventListener('click', handleRunBacktest); 
         }
     }
 
-    document.addEventListener('DOMContentLoaded',()=>{
-        setupSidebar(); 
-        initializeDashboard();
-        fetchAndRenderMailbox();
-
-        const connectPriceSocket = () => { const socket=new WebSocket(`ws://${window.location.host}/ws_prices`);socket.onopen=()=>console.log("Price socket established.");socket.onclose=()=>{setTimeout(connectPriceSocket,5000)};socket.onerror=(error)=>console.error("Price socket error:",error);socket.onmessage=(event)=>{const data=JSON.parse(event.data);const symbol=data.symbol;const newPrice=data.price;if(portfolioState.positions[symbol]){const pos=portfolioState.positions[symbol];pos.current_price=newPrice;const normSymbol=symbol.replace('/','-');const priceCell=document.getElementById(`pos-price-${normSymbol}`);const plCell=document.getElementById(`pos-pl-${normSymbol}`);if(priceCell&&plCell){priceCell.textContent=formatCurrency(newPrice);const pnl=(newPrice-pos.avg_entry_price)*pos.qty;plCell.textContent=formatCurrency(pnl);plCell.style.color=pnl>=0?'var(--accent-green)':'text-[var(--accent-red)]';const row=document.getElementById(`pos-${normSymbol}`);const flashClass=newPrice>pos.avg_entry_price?'flash-green':'flash-red';if(row){row.classList.remove('flash-green','flash-red');void row.offsetWidth;row.classList.add(flashClass)}}}}}
-        connectPriceSocket();
-
-        document.getElementById('nav-positions').addEventListener('click', () => fetchAndRender('positions-table-body', '/api/portfolio_status', (data) => renderPositions(data.positions)));
-        document.getElementById('nav-history').addEventListener('click', () => fetchAndRender('history-table-body', '/api/trade_history', renderHistory));
-        document.getElementById('nav-analytics').addEventListener('click', () => fetchAndRender('analytics-content', '/api/performance_stats', renderAnalytics));
-        document.getElementById('nav-correlation').addEventListener('click', () => fetchAndRender('correlation-content', '/api/correlation_matrix', renderCorrelation));
-        document.getElementById('nav-logs').addEventListener('click', connectLogSocket);
-        document.getElementById('export-trades-btn').addEventListener('click', () => window.location.href='/api/export/trades');
-        
-        const mailboxButton = document.getElementById('mailbox-button');
-        const mailboxDropdown = document.getElementById('mailbox-dropdown');
-        mailboxButton.addEventListener('click', () => {
-            mailboxDropdown.classList.toggle('hidden');
-            if (!mailboxDropdown.classList.contains('hidden')) {
-                markMessagesAsRead();
-            }
+    // --- MAIN INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                const panelName = link.id.replace('nav-', '');
+                loadPanel(panelName);
+            });
         });
-
-        document.getElementById('analyze-button').addEventListener('click',async()=>{addMessageToChat('Analyzing manual trading...','ai');try{const data=await fetchData('/api/analyze_behavior');document.getElementById('chat-window').lastChild.remove();addMessageToChat(data.error||data.analysis,'ai',!!data.error)}catch(e){document.getElementById('chat-window').lastChild.remove();addMessageToChat('Analysis failed.','ai',true)}});
-        
-        document.getElementById('send-button').addEventListener('click',handleSendMessage);
-        document.getElementById('chat-input').addEventListener('keypress',(e)=>{if(e.key==='Enter')handleSendMessage()});
-        document.addEventListener('keydown', e => { if (document.activeElement.tagName === 'INPUT') return; const keyMap={'d':'nav-dashboard','p':'nav-positions','h':'nav-history','a':'nav-analytics','c':'nav-correlation','l':'nav-logs'}; if(keyMap[e.key]) document.getElementById(keyMap[e.key]).click(); });
+        loadPanel('dashboard');
+        sendButton.addEventListener('click', handleSendMessage);
+        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSendMessage(); });
+        addMessageToChat("Hello! I'm your AI Copilot. Enter a stock ticker for a deep-dive analysis.");
     });
 </script>
 </body>

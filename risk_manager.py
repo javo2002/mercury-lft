@@ -1,84 +1,83 @@
 import yfinance as yf
 import pandas as pd
+from database import SessionLocal
+from database import Trade
+from sqlalchemy import func
 
-CORR_THRESHOLD = 0.7 # Don't add a new position if its avg correlation to the portfolio is > 70%
-CORR_PERIOD = "1y"
+# --- CONFIGURATION ---
+CORR_THRESHOLD = 0.7 
+CORR_PERIOD = "3mo"
+MAX_SECTOR_CONCENTRATION = 0.40 # No more than 40% of portfolio in one sector
 
-def get_market_condition(spy_period=200, vix_threshold=35.0):
-    """
-    Analyzes multiple factors to determine the overall market condition.
-    
-    Returns:
-        str: 'BULLISH', 'BEARISH', or 'NEUTRAL'
-    """
-    print("--- Running Market Condition Analysis ---")
+# --- SECTOR CACHE ---
+sector_cache = {}
+
+def get_sector(ticker):
+    """Fetches and caches the sector for a given ticker."""
+    if ticker in sector_cache:
+        return sector_cache[ticker]
     try:
-        # 1. SPY Trend Check
-        spy_hist = yf.Ticker("SPY").history(period=f"{spy_period + 50}d")
-        if spy_hist.empty:
-            print("Warning: Could not fetch SPY data. Defaulting to NEUTRAL.")
-            return 'NEUTRAL'
-            
-        spy_sma = spy_hist['Close'].rolling(window=spy_period).mean().iloc[-1]
+        info = yf.Ticker(ticker).info
+        sector = info.get('sector', 'Other')
+        sector_cache[ticker] = sector
+        return sector
+    except Exception:
+        return "Other"
+
+def get_market_condition():
+    """
+    Analyzes market trend and volatility to determine the current regime.
+    Returns a tuple: (trend_condition, volatility_regime)
+    e.g., ('BULLISH', 'LOW')
+    """
+    print("--- Running Advanced Market Regime Analysis ---")
+    try:
+        spy_hist = yf.Ticker("SPY").history(period="1y")
+        vix_hist = yf.Ticker("^VIX").history(period="1y")
+        
+        # Trend Condition
+        spy_sma_200 = spy_hist['Close'].rolling(window=200).mean().iloc[-1]
         spy_current_price = spy_hist['Close'].iloc[-1]
-        is_uptrend = spy_current_price > spy_sma
-        print(f"SPY Trend Check: Price=${spy_current_price:.2f}, SMA=${spy_sma:.2f} -> {'UPTREND' if is_uptrend else 'DOWNTREND'}")
+        trend_condition = 'BULLISH' if spy_current_price > spy_sma_200 else 'BEARISH'
 
-        # 2. VIX Fear Check
-        vix_hist = yf.Ticker("^VIX").history(period="5d")
+        # Volatility Regime
+        vix_sma_50 = vix_hist['Close'].rolling(window=50).mean().iloc[-1]
         vix_current_level = vix_hist['Close'].iloc[-1]
-        is_high_fear = vix_current_level > vix_threshold
-        print(f"VIX Fear Check: Level={vix_current_level:.2f}, Threshold=<{vix_threshold} -> {'HIGH FEAR' if is_high_fear else 'NORMAL'}")
+        volatility_regime = 'HIGH' if vix_current_level > vix_sma_50 else 'LOW'
 
-        # 3. Yield Curve Check
-        ten_year = yf.Ticker("^TNX").history(period="5d")['Close'].iloc[-1]
-        three_month = yf.Ticker("^IRX").history(period="5d")['Close'].iloc[-1]
-        is_inverted = ten_year < three_month
-        print(f"Yield Curve Check: 10Y={ten_year:.2f}%, 3M={three_month:.2f}% -> {'INVERTED' if is_inverted else 'NORMAL'}")
-
-        if is_uptrend and not is_high_fear and not is_inverted:
-            print("Result: Market condition is BULLISH.")
-            return 'BULLISH'
-        elif not is_uptrend and not is_inverted:
-            print("Result: Market condition is BEARISH.")
-            return 'BEARISH'
-        else:
-            print("Result: Market condition is NEUTRAL/UNCERTAIN. No new trades advised.")
-            return 'NEUTRAL'
+        print(f"  -> Trend: {trend_condition} | Volatility: {volatility_regime}")
+        return trend_condition, volatility_regime
             
     except Exception as e:
-        print(f"Error during market condition analysis: {e}")
-        return 'NEUTRAL'
+        print(f"  -> Market condition analysis failed: {e}. Defaulting to NEUTRAL.")
+        return 'NEUTRAL', 'HIGH'
 
-def is_correlation_safe(new_ticker, open_positions_tickers):
+def check_portfolio_constraints(new_ticker_sector, open_positions):
     """
-    Checks if a new ticker is highly correlated with existing positions.
+    Checks if adding a new position would violate portfolio constraints.
+    - Sector Concentration
     """
-    if not open_positions_tickers:
-        return True
+    if not open_positions:
+        return True # No positions, no constraints to violate
 
-    print(f"--- Running Correlation Check for {new_ticker} ---")
-    all_tickers = open_positions_tickers + [new_ticker]
-    try:
-        data = yf.download(all_tickers, period=CORR_PERIOD, progress=False)['Adj Close']
-        if data.empty or data.shape[1] != len(all_tickers):
-            print("  -> Warning: Could not get complete correlation data. Assuming safe.")
-            return True
-            
-        returns = data.pct_change().dropna()
-        corr_matrix = returns.corr()
-        avg_corr = corr_matrix[new_ticker][open_positions_tickers].mean()
-        
-        print(f"  -> Average correlation of {new_ticker} to portfolio: {avg_corr:.2f}")
-        
-        if avg_corr > CORR_THRESHOLD:
-            print(f"  -> Result: UNSAFE. Correlation ({avg_corr:.2f}) exceeds threshold ({CORR_THRESHOLD}).")
-            return False
-        else:
-            print(f"  -> Result: SAFE. Correlation is acceptable.")
-            return True
+    print("--- Checking Portfolio Constraints ---")
+    
+    # Sector Concentration Check
+    sector_exposure = {}
+    total_market_value = sum(float(p.market_value) for p in open_positions)
+    if total_market_value == 0: return True
 
-    except Exception as e:
-        print(f"  -> Warning: Correlation check failed: {e}. Assuming safe.")
-        return True
+    for p in open_positions:
+        sector = get_sector(p.symbol)
+        sector_exposure[sector] = sector_exposure.get(sector, 0) + float(p.market_value)
+    
+    # Calculate what the new concentration would be
+    potential_new_exposure = sector_exposure.get(new_ticker_sector, 0) + (total_market_value / len(open_positions)) # Approximate value of new trade
+    potential_total_value = total_market_value + (total_market_value / len(open_positions))
+    
+    if (potential_new_exposure / potential_total_value) > MAX_SECTOR_CONCENTRATION:
+        print(f"  -> VIOLATION: Adding a trade in '{new_ticker_sector}' would exceed max sector concentration.")
+        return False
 
+    print("  -> Portfolio constraints passed.")
+    return True

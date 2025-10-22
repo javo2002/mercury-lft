@@ -1,123 +1,97 @@
-import os
-import sys
-import time
-from datetime import datetime, timedelta
 import pandas as pd
-import talib
-from dotenv import load_dotenv # --- FIX: Import the library ---
+import pandas_ta as ta
+import yfinance as yf
+from tqdm import tqdm
+import requests
+from io import StringIO
 
-from alpaca.trading.client import TradingClient
-from alpaca.trading.requests import GetAssetsRequest
-from alpaca.trading.enums import AssetClass, AssetStatus
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
+# --- CONFIGURATION ---
+MIN_VOLUME = 1_000_000
+MIN_PRICE = 20
+OUTPUT_FILES = {
+    "trend": "trend_screener_results.txt",
+    "reversion": "reversion_screener_results.txt",
+    "volatility": "volatility_screener_results.txt"
+}
 
-# --- FIX: Add this line to load API keys from your .env file ---
-load_dotenv()
-
-API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
-
-# --- The rest of the script is unchanged ---
-MIN_SHARE_PRICE = 20.0
-MIN_AVG_DAILY_VOLUME = 1_000_000
-MIN_AVG_DOLLAR_VOLUME = 20_000_000
-TOP_N_RESULTS = 30 
-BATCH_SIZE = 100
-
-TREND_OUTPUT_FILE = 'trend_screener_results.txt'
-REVERSION_OUTPUT_FILE = 'reversion_screener_results.txt'
-VOLATILITY_OUTPUT_FILE = 'volatility_screener_results.txt'
-
-def chunks(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
+def get_sp500_tickers():
+    """Fetches the list of S&P 500 tickers from Wikipedia."""
+    try:
+        # A User-Agent header is crucial to avoid being blocked by web servers.
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        # Wrap the HTML text in a StringIO object to ensure compatibility with pandas
+        table = pd.read_html(StringIO(response.text))
+        # Symbol corrections for yfinance compatibility
+        tickers = table[0]['Symbol'].tolist()
+        return [ticker.replace('.', '-') for ticker in tickers]
+    except Exception as e:
+        print(f"Could not fetch S&P 500 tickers: {e}")
+        return []
 
 def run_screener():
-    if not API_KEY or not API_SECRET:
-        print("Error: API_KEY and/or API_SECRET not found in .env file.")
-        sys.exit(1)
+    """
+    Runs technical screens on S&P 500 stocks using yfinance and pandas-ta.
+    """
+    print("--- Starting Screener (pandas-ta version) ---")
+    tickers = get_sp500_tickers()
+    if not tickers:
+        print("Could not get ticker list. Exiting.")
+        return {} # Return an empty dictionary on failure
 
-    print("--- Starting Advanced Stock Screener & Ranker ---")
-    trading_client = TradingClient(API_KEY, API_SECRET, paper=True)
-    data_client = StockHistoricalDataClient(API_KEY, API_SECRET)
-
-    search_params = GetAssetsRequest(asset_class=AssetClass.US_EQUITY, status=AssetStatus.ACTIVE)
-    assets = trading_client.get_all_assets(search_params)
+    results = {"trend": [], "reversion": [], "volatility": []}
     
-    tradable_symbols = [
-        a.symbol for a in assets 
-        if a.tradable and a.exchange in ['NASDAQ', 'NYSE', 'ARCA']
-        and '.' not in a.symbol and '/' not in a.symbol and not a.symbol.endswith('W')
-    ]
-    print(f"Found {len(assets)} total assets. Analyzing {len(tradable_symbols)} relevant US equities.")
+    # Download all data in a single, efficient batch
+    print(f"Downloading data for {len(tickers)} S&P 500 stocks...")
+    all_data = yf.download(tickers, period="1y", group_by='ticker', progress=True)
 
-    scored_stocks = []
-    symbol_chunks = list(chunks(tradable_symbols, BATCH_SIZE))
-    
-    for i, chunk in enumerate(symbol_chunks):
-        print(f"Analyzing batch {i+1}/{len(symbol_chunks)}...")
+    print("\nAnalyzing stocks...")
+    for ticker in tqdm(tickers):
         try:
-            request_params = StockBarsRequest(
-                symbol_or_symbols=chunk,
-                timeframe=TimeFrame.Day,
-                start=datetime.now() - timedelta(days=90),
-                feed='iex'
-            )
-            bars = data_client.get_stock_bars(request_params).df
+            df = all_data[ticker].copy()
+            if df.empty or df['Volume'].mean() < MIN_VOLUME or df['Close'].iloc[-1] < MIN_PRICE:
+                continue
+
+            # Calculate all necessary indicators at once
+            df.ta.sma(length=50, append=True)
+            df.ta.sma(length=200, append=True)
+            df.ta.rsi(length=14, append=True)
+            df.ta.bbands(length=20, append=True)
             
-            if bars.empty: continue
+            last = df.iloc[-1]
+            prev = df.iloc[-2]
 
-            for symbol in bars.index.get_level_values('symbol').unique():
-                symbol_bars = bars.loc[symbol]
-                if symbol_bars.empty or len(symbol_bars) < 51: continue
+            # Trend Screen (Golden Cross)
+            if last['SMA_50'] > last['SMA_200'] and prev['SMA_50'] <= prev['SMA_200']:
+                results["trend"].append(ticker)
 
-                avg_volume = symbol_bars['volume'].mean()
-                latest_close = symbol_bars['close'].iloc[-1]
-                avg_dollar_volume = (symbol_bars['close'] * symbol_bars['volume']).mean()
+            # Mean Reversion Screen (Oversold)
+            if last['RSI_14'] < 35 and prev['RSI_14'] >= 35:
+                results["reversion"].append(ticker)
 
-                if (latest_close < MIN_SHARE_PRICE or 
-                    avg_volume < MIN_AVG_DAILY_VOLUME or 
-                    avg_dollar_volume < MIN_AVG_DOLLAR_VOLUME):
-                    continue
+            # Volatility Screen (Breakout above upper Bollinger Band)
+            if last['Close'] > last['BBU_20_2.0']:
+                results["volatility"].append(ticker)
 
-                sma_50 = talib.SMA(symbol_bars['close'], timeperiod=50).iloc[-1]
-                trend_score = (latest_close - sma_50) / sma_50 if sma_50 > 0 else 0
-
-                atr_14 = talib.ATR(symbol_bars['high'], symbol_bars['low'], symbol_bars['close'], timeperiod=14).iloc[-1]
-                volatility_score = (atr_14 / latest_close) * 100 if latest_close > 0 else 0
-                
-                upper, middle, lower = talib.BBANDS(symbol_bars['close'], timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
-                bbw_score = (upper.iloc[-1] - lower.iloc[-1]) / middle.iloc[-1] if middle.iloc[-1] > 0 else float('inf')
-
-                scored_stocks.append({
-                    'symbol': symbol,
-                    'trend_score': trend_score,
-                    'volatility_score': volatility_score,
-                    'bbw_score': bbw_score
-                })
-        except Exception as e:
-            print(f"Could not process batch {i+1}: {e}")
+        except (KeyError, IndexError):
+            # This handles cases where a ticker download fails within the batch
+            # print(f"Warning: Could not process data for {ticker}. It may be delisted or has incomplete data.")
             continue
-    
-    print(f"\n--- Screener Complete ---")
-    print(f"Found {len(scored_stocks)} liquid stocks to score and rank.")
-
-    trend_shortlist = sorted(scored_stocks, key=lambda x: x['trend_score'], reverse=True)
-    with open(TREND_OUTPUT_FILE, 'w') as f:
-        for stock in trend_shortlist[:TOP_N_RESULTS]: f.write(f"{stock['symbol']}\n")
-    print(f"Top {TOP_N_RESULTS} trend-following candidates saved to {TREND_OUTPUT_FILE}")
-
-    reversion_shortlist = sorted(scored_stocks, key=lambda x: x['volatility_score'], reverse=True)
-    with open(REVERSION_OUTPUT_FILE, 'w') as f:
-        for stock in reversion_shortlist[:TOP_N_RESULTS]: f.write(f"{stock['symbol']}\n")
-    print(f"Top {TOP_N_RESULTS} mean-reversion candidates saved to {REVERSION_OUTPUT_FILE}")
-
-    volatility_shortlist = sorted(scored_stocks, key=lambda x: x['bbw_score'])
-    with open(VOLATILITY_OUTPUT_FILE, 'w') as f:
-        for stock in volatility_shortlist[:TOP_N_RESULTS]: f.write(f"{stock['symbol']}\n")
-    print(f"Top {TOP_N_RESULTS} volatility-breakout candidates saved to {VOLATILITY_OUTPUT_FILE}")
+            
+    # Write results to files
+    for key, filename in OUTPUT_FILES.items():
+        with open(filename, 'w') as f:
+            for ticker in results[key]:
+                f.write(f"{ticker}\n")
+        print(f"Found {len(results[key])} tickers for {key} screen. Saved to {filename}.")
+        
+    print("\n--- Screener Complete ---")
+    return results
 
 if __name__ == "__main__":
     run_screener()
+
