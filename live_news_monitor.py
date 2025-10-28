@@ -1,24 +1,26 @@
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
-import alpaca_trade_api as tradeapi
 from datetime import datetime
-import sqlite3
 import json
 
+# --- FIX: Import new libraries ---
+from alpaca.trading.client import TradingClient
+from database import SessionLocal, Event
+from config import settings
+
 # --- CONFIGURATION ---
-load_dotenv()
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-API_KEY = os.getenv('API_KEY')
-API_SECRET = os.getenv('API_SECRET')
-BASE_URL = 'https://paper-api.alpaca.markets'
-DATABASE_FILE = 'trading_data.db'
+# --- FIX: Configure GenAI and Alpaca Client from central settings ---
+genai.configure(api_key=settings.GEMINI_API_KEY)
+trading_client = TradingClient(settings.API_KEY, settings.API_SECRET, paper=True)
+
 
 def get_current_positions():
     """Fetches the list of current stock positions from Alpaca."""
     try:
-        api = tradeapi.REST(API_KEY, API_SECRET, base_url=BASE_URL)
-        return [p.symbol for p in api.list_positions()]
+        # --- FIX: Use new alpaca-py client ---
+        positions = trading_client.get_all_positions()
+        return [p.symbol for p in positions]
     except Exception as e:
         print(f"Error fetching positions: {e}")
         return []
@@ -26,11 +28,10 @@ def get_current_positions():
 def classify_news_event(ticker):
     """
     Uses Gemini to classify breaking news into a specific, tradable event type.
+    (This function logic remains the same)
     """
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-pro-latest')
-
         prompt = f"""
         Analyze the single most significant financial news headline for the stock ticker "{ticker}" published within the last 60-90 minutes.
 
@@ -68,42 +69,46 @@ def classify_news_event(ticker):
 
 def run_live_monitor():
     """
-    Main function to monitor for and log specific, tradable news events.
+    Main function to monitor for and log specific, tradable news events
+    using SQLAlchemy.
     """
     print(f"\n--- [ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ] ---")
-    print("--- Running Event Detector Monitor ---")
+    print("--- Running Event Detector Monitor (SQLAlchemy version) ---")
 
-    # For event detection, we might want to scan a broader list than just current positions
-    # For now, we'll stick to positions, but this could be expanded.
     positions = get_current_positions()
     if not positions:
         print("No open positions to monitor for events. Exiting.")
         return
 
-    conn = sqlite3.connect(DATABASE_FILE)
-    cursor = conn.cursor()
+    # --- FIX: Use SQLAlchemy session ---
+    session = SessionLocal()
+    try:
+        for ticker in positions:
+            print(f"Scanning for events on {ticker}...")
+            event_data = classify_news_event(ticker)
 
-    for ticker in positions:
-        print(f"Scanning for events on {ticker}...")
-        event_data = classify_news_event(ticker)
-
-        if event_data.get("event_found"):
-            event_type = event_data.get('event_type')
-            print(f"  -> EVENT DETECTED for {ticker}: {event_type}!")
-            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            cursor.execute('''
-                INSERT INTO events (timestamp, ticker, event_type, headline, source_url)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (
-                timestamp, ticker, event_type,
-                event_data.get('headline'), event_data.get('source_url')
-            ))
-            conn.commit()
+            if event_data.get("event_found"):
+                event_type = event_data.get('event_type')
+                print(f"  -> EVENT DETECTED for {ticker}: {event_type}!")
+                
+                # --- FIX: Create Event object and add to session ---
+                event_entry = Event(
+                    timestamp=datetime.now().isoformat(),
+                    ticker=ticker,
+                    event_type=event_type,
+                    headline=event_data.get('headline'),
+                    source_url=event_data.get('source_url')
+                )
+                session.add(event_entry)
+                
+        session.commit()
+    except Exception as e:
+        print(f"Error during event monitor loop: {e}")
+        session.rollback()
+    finally:
+        session.close()
     
-    conn.close()
     print("--- Event Detector run complete ---")
 
 if __name__ == "__main__":
     run_live_monitor()
-

@@ -23,6 +23,9 @@ class Trade(Base):
     # Link to post-trade analysis
     analysis = relationship("PostTradeAnalysis", back_populates="trade", uselist=False)
 
+    def as_dict(self):
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 # --- NEW TABLE FOR PHASE 3 ---
 class PostTradeAnalysis(Base):
     __tablename__ = 'post_trade_analysis'
@@ -32,6 +35,8 @@ class PostTradeAnalysis(Base):
     market_comparison_pnl = Column(Float)
     ai_summary = Column(Text)
     trade = relationship("Trade", back_populates="analysis")
+    def as_dict(self):
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
 # --- NEW TABLE FOR PHASE 3 ---
 class Feedback(Base):
@@ -46,6 +51,7 @@ class Feedback(Base):
 class BacktestResult(Base):
     __tablename__ = 'backtest_results'
     id = Column(Integer, primary_key=True)
+    ticker = Column(String, index=True)
     strategy_name = Column(String, nullable=False)
     parameters = Column(String) # Stored as a string dictionary
     start_date = Column(String)
@@ -57,7 +63,9 @@ class BacktestResult(Base):
     timestamp = Column(String)
     report_url = Column(String) # Link to the generated pyfolio report
 
-# ... other existing tables (Signal, Sentiment, Mailbox, etc.) remain the same ...
+    def as_dict(self):
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 class Signal(Base):
     __tablename__ = 'signals'
     id = Column(Integer, primary_key=True)
@@ -71,6 +79,9 @@ class Signal(Base):
     live_signal = Column(String, index=True)
     last_close = Column(Float)
 
+    def as_dict(self):
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 class Sentiment(Base):
     __tablename__ = 'sentiment'
     id = Column(Integer, primary_key=True)
@@ -81,6 +92,9 @@ class Sentiment(Base):
     keywords = Column(String)
     top_headline = Column(String)
 
+    def as_dict(self):
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 class Mailbox(Base):
     __tablename__ = 'mailbox'
     id = Column(Integer, primary_key=True)
@@ -88,6 +102,10 @@ class Mailbox(Base):
     subject = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     status = Column(String, default='unread', index=True)
+
+    # --- ADD THIS METHOD ---
+    def as_dict(self):
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
 class InstrumentRisk(Base):
     __tablename__ = "instrument_risk"
@@ -101,6 +119,15 @@ class SystemStatus(Base):
     id = Column(Integer, primary_key=True)
     trading_enabled = Column(Boolean, default=True, nullable=False)
 
+# --- NEW TABLE FOR LIVE EVENTS ---
+class Event(Base):
+    __tablename__ = 'events'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(String)
+    ticker = Column(String, nullable=False, index=True)
+    event_type = Column(String, nullable=False)
+    headline = Column(Text)
+    source_url = Column(String)
 
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

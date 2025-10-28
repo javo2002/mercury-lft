@@ -12,8 +12,9 @@ services:
       redis:
         condition: service_started
     volumes:
-      - .:/app
-      - ./static:/app/static # Mount the static folder for backtest reports
+      # --- FIX: Removed insecure '.:/app' mount ---
+      # Mount only the static folder, which is necessary for reports.
+      - ./static:/app/static 
 
   worker:
     build: .
@@ -27,23 +28,22 @@ services:
       redis:
         condition: service_started
     volumes:
-      - .:/app
-  
-  # --- NEW: SCHEDULER SERVICE FOR PHASE 5 ---
+      # --- FIX: Removed insecure '.:/app' mount ---
+      # This service needs access to the static folder to write reports.
+      - ./static:/app/static 
+
   scheduler:
     build: .
     container_name: mercury_scheduler
     restart: always
-    # This command starts the Celery Beat scheduler
-    command: celery -A tasks.celery beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A tasks.celery beat -l info
     env_file: .env
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
-    volumes:
-      - .:/app
+    volumes: [] # <--- CORRECT: An empty list is valid
 
   db:
     image: postgres:15-alpine
@@ -76,4 +76,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-

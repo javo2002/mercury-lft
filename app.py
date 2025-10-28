@@ -9,10 +9,11 @@ import logging
 
 # --- Project Imports ---
 from config import settings
-from database import SessionLocal, Signal, Trade, Sentiment, Mailbox, Feedback, BacktestResult, SystemStatus, init_db
+from database import SessionLocal, Signal, Trade, Sentiment, Mailbox, Feedback, BacktestResult, SystemStatus, PostTradeAnalysis, init_db
 import ai_services
 import performance_calculator
 from tasks import run_backtest_task
+from research.backtester import STRATEGY_MAP
 
 # --- Alpaca & Data Clients ---
 from alpaca.trading.client import TradingClient
@@ -116,6 +117,41 @@ def get_performance_stats():
     finally:
         session.close()
 
+@app.route('/api/latest_daily_plan')
+def get_latest_daily_plan():
+    """Fetches the latest unread daily plan from the mailbox."""
+    session = SessionLocal()
+    today_str = datetime.now().strftime('%Y-%m-%d')
+    try:
+        # Find the latest plan for today with status 'unread'
+        latest_plan = session.query(Mailbox).filter(
+            Mailbox.subject.like(f"Daily Trade Plan: {today_str}%"),
+            Mailbox.status == 'unread'
+        ).order_by(Mailbox.timestamp.desc()).first()
+
+        if latest_plan:
+            plan_data = latest_plan.as_dict()
+            # Optionally mark as read after fetching
+            # latest_plan.status = 'read'
+            # session.commit()
+            return jsonify(plan_data)
+        else:
+            # If no unread plan for today, find the absolute latest plan
+            absolute_latest = session.query(Mailbox).filter(
+                 Mailbox.subject.like("Daily Trade Plan:%")
+            ).order_by(Mailbox.timestamp.desc()).first()
+            if absolute_latest:
+                 return jsonify(absolute_latest.as_dict())
+            else:
+                 return jsonify({"subject": "No Plan Available", "content": "The daily plan has not been generated yet."})
+
+    except Exception as e:
+        logging.error(f"DB query failed for latest daily plan: {e}")
+        session.rollback() # Rollback in case of error during status update
+        return jsonify({"error": f"DB query failed: {e}"}), 500
+    finally:
+        session.close()
+
 # --- AI & Research Endpoints ---
 @app.route('/api/ai/chat', methods=['POST'])
 def handle_ai_chat():
@@ -160,6 +196,47 @@ def get_available_tickers():
     try:
         tickers = session.query(Signal.ticker).distinct().order_by(Signal.ticker).all()
         return jsonify([t[0] for t in tickers])
+    finally:
+        session.close()
+
+@app.route('/api/research/available_strategies')
+def get_available_strategies():
+    """Gets a list of all strategies available in the backtester."""
+    return jsonify(list(STRATEGY_MAP.keys()))
+
+@app.route('/api/ai_journal')
+def get_ai_journal():
+    """Fetches the AI's post-trade analysis and critiques."""
+    session = SessionLocal()
+    try:
+        results = (
+            session.query(
+                Trade.timestamp,
+                Trade.ticker,
+                Trade.action,
+                Trade.reason,
+                PostTradeAnalysis.pnl,
+                PostTradeAnalysis.ai_summary
+            )
+            .join(PostTradeAnalysis, Trade.id == PostTradeAnalysis.trade_id)
+            .order_by(Trade.timestamp.desc())
+            .all()
+        )
+        
+        journal_entries = [
+            {
+                "timestamp": r.timestamp,
+                "ticker": r.ticker,
+                "action": r.action,
+                "reason": r.reason,
+                "pnl": r.pnl,
+                "critique": r.ai_summary
+            } for r in results
+        ]
+        return jsonify(journal_entries)
+    except Exception as e:
+        logging.error(f"DB query failed for AI journal: {e}")
+        return jsonify({"error": f"DB query failed: {e}"}), 500
     finally:
         session.close()
 

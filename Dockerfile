@@ -15,7 +15,6 @@ RUN pip install --upgrade pip setuptools wheel
 
 # Copy only the requirements file first (for Docker layer caching)
 COPY requirements.txt .
-
 # Install all Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -25,5 +24,5 @@ COPY . .
 # Expose your app’s port (optional, for clarity)
 EXPOSE 8080
 
-# Set the command to run the development web server
-CMD ["flask", "run", "--host=0.0.0.0", "--port=8080"]
+# --- FIX: Set the command to run the Gunicorn production server ---
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "app:app"]
